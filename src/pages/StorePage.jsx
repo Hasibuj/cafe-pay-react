@@ -1,206 +1,236 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useAccount, useReadContract, useWriteContract } from 'wagmi'
+import { useAccount, useWriteContract, useSwitchChain } from 'wagmi'
 import { ethers } from 'ethers'
 import { ArrowLeft, Coffee, CreditCard, ImageOff } from 'lucide-react'
 import MenuItemCard from '../components/MenuItemCard'
 import ReceiptModal from '../components/ReceiptModal'
 import {
   getShopLogo, getShopTagline, isItemDeleted, isItemAvailable,
-  getItemNameOverride,
+  getItemNameOverride, fetchShopMeta,
 } from '../utils/storage'
-import { CONTRACT_ADDRESS, USDC_ADDRESS, ABI_CAFEPAY, ABI_ERC20 } from '../config/wagmi'
+import {
+  CONTRACT_ADDRESS, USDC_ADDRESS, ABI_CAFEPAY, ABI_ERC20, arcTestnet,
+} from '../config/wagmi'
+import { getCafePayContract, getUsdcContract } from '../utils/rpc'
+import { useMetaVersion } from '../hooks/useShopMeta'
 
 function StorePage({ shopOwnerAddress, onBackToDirectory }) {
-  const { address: userAddress } = useAccount()
+  const { address: userAddress, chainId } = useAccount()
   const { writeContractAsync } = useWriteContract()
+  const { switchChainAsync } = useSwitchChain()
 
   const [shopName, setShopName] = useState('Loading Shop...')
   const [shopTagline, setShopTagline] = useState('Fresh food & delicious coffee served daily!')
   const [menuItems, setMenuItems] = useState([])
+  const [menuData, setMenuData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [receipt, setReceipt] = useState(null)
+  const [logoFailed, setLogoFailed] = useState(false)
+  useMetaVersion()
 
-  const cleanOwner = shopOwnerAddress ? ethers.getAddress(shopOwnerAddress) : null
-
-  const { data: shopData } = useReadContract({
-    address: CONTRACT_ADDRESS,
-    abi: ABI_CAFEPAY,
-    functionName: 'shops',
-    args: cleanOwner ? [cleanOwner] : undefined,
-    query: { enabled: !!cleanOwner },
-  })
-
-  const { data: menuData } = useReadContract({
-    address: CONTRACT_ADDRESS,
-    abi: ABI_CAFEPAY,
-    functionName: 'getShopMenu',
-    args: cleanOwner ? [cleanOwner] : undefined,
-    query: { enabled: !!cleanOwner },
-  })
+  let cleanOwner = null
+  try {
+    cleanOwner = shopOwnerAddress ? ethers.getAddress(shopOwnerAddress) : null
+  } catch {
+    cleanOwner = null
+  }
 
   useEffect(() => {
-    if (shopData) {
-      setShopName(shopData[0] || shopData.shopName || 'Shop Not Found')
-      if (cleanOwner) setShopTagline(getShopTagline(cleanOwner))
-    }
-  }, [shopData, cleanOwner])
-
-  useEffect(() => {
-    if (menuData && cleanOwner) {
+    if (!cleanOwner) {
       setLoading(false)
-      if (!menuData || menuData.length === 0) { setMenuItems([]); return }
-      const visible = menuData.filter((item) => {
-        if (isItemDeleted(cleanOwner, item.id)) return false
-        if (!isItemAvailable(cleanOwner, item.id)) return false
-        return true
-      })
-      setMenuItems(visible)
+      setShopName('Invalid shop')
+      return
     }
-  }, [menuData, cleanOwner])
+
+    let cancelled = false
+
+    async function load() {
+      setLoading(true)
+      try {
+        const cafe = getCafePayContract()
+        const [shop, menu] = await Promise.all([
+          cafe.shops(cleanOwner),
+          cafe.getShopMenu(cleanOwner),
+        ])
+        if (cancelled) return
+
+        const exists = shop.exists ?? shop[2]
+        const name = shop.shopName ?? shop[0]
+        setShopName(exists ? (name || 'Shop') : 'Shop not found')
+        setMenuData(menu)
+
+        try {
+          await fetchShopMeta(cleanOwner)
+        } catch {
+          /* Turso optional offline */
+        }
+        if (cancelled) return
+
+        setShopTagline(getShopTagline(cleanOwner))
+
+        const visible = (menu || []).filter((item) => {
+          if (isItemDeleted(cleanOwner, item.id)) return false
+          if (!isItemAvailable(cleanOwner, item.id)) return false
+          if (item.active === false) return false
+          return true
+        })
+        setMenuItems(visible)
+      } catch (err) {
+        console.error('Store load failed:', err)
+        if (!cancelled) {
+          setShopName('Failed to load shop')
+          setMenuItems([])
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    load()
+    return () => { cancelled = true }
+  }, [cleanOwner])
 
   const handleBuy = useCallback(async (shopOwner, itemIndex, finalAmount) => {
-    if (!userAddress) { alert('Please connect wallet to buy.'); return }
+    if (!userAddress) {
+      alert('Please connect your wallet to pay with USDC.')
+      return
+    }
+
     try {
-      const menu = menuData || await (async () => {
-        const readOnlyProvider = new (await import('ethers')).ethers.JsonRpcProvider('https://rpc.blockdaemon.testnet.arc.io')
-        const c = new (await import('ethers')).ethers.Contract(CONTRACT_ADDRESS, ABI_CAFEPAY, readOnlyProvider)
-        return c.getShopMenu(shopOwner)
-      })()
+      if (chainId !== arcTestnet.id) {
+        try {
+          await switchChainAsync({ chainId: arcTestnet.id })
+        } catch {
+          alert('Please switch your wallet to Arc Testnet.')
+          return
+        }
+      }
+
+      const cafe = getCafePayContract()
+      const menu = menuData || await cafe.getShopMenu(shopOwner)
       const itemObj = menu.find((i) => Number(i.id) === Number(itemIndex))
       const itemName = getItemNameOverride(shopOwner, itemIndex) || itemObj?.name || 'Item'
 
-      const parsedAmount = ethers.parseUnits(finalAmount.toString(), 6)
+      const onChainPrice = itemObj?.price != null
+        ? BigInt(itemObj.price.toString())
+        : ethers.parseUnits(finalAmount.toString(), 6)
 
-      const allowance = await (async () => {
-        const readOnlyProvider = new (await import('ethers')).ethers.JsonRpcProvider('https://rpc.blockdaemon.testnet.arc.io')
-        const usdc = new (await import('ethers')).ethers.Contract(USDC_ADDRESS, ABI_ERC20, readOnlyProvider)
-        return usdc.allowance(userAddress, CONTRACT_ADDRESS)
-      })()
+      const usdc = getUsdcContract()
+      const allowance = await usdc.allowance(userAddress, CONTRACT_ADDRESS)
 
-      if (allowance < parsedAmount) {
+      if (allowance < onChainPrice) {
         await writeContractAsync({
           address: USDC_ADDRESS,
           abi: ABI_ERC20,
           functionName: 'approve',
-          args: [CONTRACT_ADDRESS, parsedAmount],
+          args: [CONTRACT_ADDRESS, onChainPrice],
+          chainId: arcTestnet.id,
         })
-        // Wait for approval to be mined
-        await new Promise((resolve) => setTimeout(resolve, 3000))
+        await new Promise((resolve) => setTimeout(resolve, 2500))
       }
 
       const buyHash = await writeContractAsync({
         address: CONTRACT_ADDRESS,
         abi: ABI_CAFEPAY,
         functionName: 'buyItem',
-        args: [shopOwner, itemIndex],
+        args: [shopOwner, BigInt(itemIndex)],
+        chainId: arcTestnet.id,
       })
 
-      const shop = await (async () => {
-        const readOnlyProvider = new (await import('ethers')).ethers.JsonRpcProvider('https://rpc.blockdaemon.testnet.arc.io')
-        const c = new (await import('ethers')).ethers.Contract(CONTRACT_ADDRESS, ['function shops(address) external view returns (string, address, bool)'], readOnlyProvider)
-        return c.shops(shopOwner)
-      })()
+      const shop = await cafe.shops(shopOwner)
+      const paidUsdc = Number(ethers.formatUnits(onChainPrice, 6))
 
       setReceipt({
-        shopName: shop[0] || shop.shopName || 'CafePay Shop',
+        shopName: shop.shopName || shop[0] || 'CafePay Shop',
         itemName,
-        finalAmount,
+        finalAmount: paidUsdc,
         txHash: buyHash,
       })
     } catch (err) {
-      alert('Transaction failed: ' + (err.reason || err.message))
+      alert('Transaction failed: ' + (err.shortMessage || err.reason || err.message))
     }
-  }, [userAddress, menuData, writeContractAsync])
+  }, [userAddress, chainId, menuData, writeContractAsync, switchChainAsync])
 
   const logoUrl = cleanOwner ? getShopLogo(cleanOwner) : null
 
-  return (
-    <section className="space-y-6 animate-fade-in">
-      <button
-        onClick={onBackToDirectory}
-        className="inline-flex items-center gap-2 text-xs font-semibold px-4 py-2.5 rounded-xl border transition-colors"
-        style={{
-          background: 'var(--bg-card)',
-          borderColor: 'var(--border-default)',
-          color: 'var(--text-secondary)',
-        }}
-      >
-        <ArrowLeft size={14} />
-        Back to Restaurant Directory
-      </button>
+  useEffect(() => {
+    setLogoFailed(false)
+  }, [logoUrl])
 
-      {/* Store Banner */}
-      <div
-        className="rounded-2xl p-6 md:p-8 border flex flex-col md:flex-row items-center gap-6"
-        style={{
-          background: 'var(--bg-card)',
-          borderColor: 'var(--border-default)',
-        }}
-      >
-        <div
-          className="w-16 h-16 rounded-xl flex items-center justify-center text-3xl border overflow-hidden shrink-0"
-          style={{
-            background: 'var(--bg-input)',
-            borderColor: 'var(--border-default)',
-          }}
+  return (
+    <section className="cp-store animate-fade-in">
+      <div className="cp-store-nav">
+        <button
+          type="button"
+          onClick={onBackToDirectory}
+          className="cp-back-btn"
         >
-          {logoUrl ? (
-            <img src={logoUrl} alt="Shop logo" className="w-full h-full object-cover" />
+          <ArrowLeft size={16} strokeWidth={2.25} />
+          <span>Back to directory</span>
+        </button>
+      </div>
+
+      <div className="cp-panel cp-store-banner">
+        <div className="cp-store-logo">
+          {logoUrl && !logoFailed ? (
+            <img
+              src={logoUrl}
+              alt=""
+              className="w-full h-full object-cover"
+              onError={() => setLogoFailed(true)}
+            />
           ) : (
-            <Coffee size={28} style={{ color: 'var(--text-tertiary)' }} />
+            <Coffee size={28} style={{ color: 'var(--text-tertiary)' }} aria-hidden />
           )}
         </div>
-        <div className="text-center md:text-left flex-1">
-          <h2 className="text-xl md:text-2xl font-black" style={{ color: 'var(--text-primary)' }}>
+
+        <div className="cp-store-banner-text">
+          <h2 className="cp-h2 text-balance" style={{ color: 'var(--text-primary)' }}>
             {shopName}
           </h2>
-          <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
-            {shopTagline}
-          </p>
+          <p className="cp-store-tagline">{shopTagline}</p>
         </div>
-        <div
-          className="px-4 py-3 rounded-xl border text-center shrink-0"
-          style={{
-            background: 'var(--bg-input)',
-            borderColor: 'var(--border-default)',
-          }}
-        >
-          <span className="block text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
-            Accepted Token
-          </span>
-          <span className="text-xs font-bold flex items-center gap-1 mt-0.5" style={{ color: 'var(--color-brand-500)' }}>
-            <CreditCard size={12} />
-            USDC (Arc Testnet)
+
+        <div className="cp-store-pay-badge">
+          <span className="cp-store-pay-label">Payments</span>
+          <span className="cp-store-pay-value">
+            <CreditCard size={13} aria-hidden />
+            USDC · Arc
           </span>
         </div>
       </div>
 
-      {/* Menu */}
-      <div>
-        <h3 className="text-lg font-bold mb-5" style={{ color: 'var(--text-primary)' }}>
-          Menu Items
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="cp-store-menu-section">
+        <div className="cp-store-menu-head">
+          <h3 className="cp-h3" style={{ color: 'var(--text-primary)' }}>
+            Menu
+          </h3>
+          {!loading && menuItems.length > 0 && (
+            <span className="cp-store-menu-count">
+              {menuItems.length} item{menuItems.length === 1 ? '' : 's'}
+            </span>
+          )}
+        </div>
+
+        <div className="cp-grid-menu">
           {loading ? (
-            <div
-              className="col-span-3 flex flex-col items-center justify-center py-20 gap-3"
-              style={{ color: 'var(--text-tertiary)' }}
-            >
-              <div className="w-8 h-8 border-2 rounded-full animate-spin" style={{ borderColor: 'var(--border-default)', borderTopColor: 'var(--color-brand-500)' }} />
-              <p className="text-sm font-medium">Loading menu…</p>
+            <div className="cp-empty">
+              <div className="cp-spinner" aria-hidden />
+              <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+                Loading menu from Arc RPC…
+              </p>
             </div>
           ) : menuItems.length === 0 ? (
-            <div
-              className="col-span-3 flex flex-col items-center justify-center py-20 gap-3"
-              style={{ color: 'var(--text-tertiary)' }}
-            >
-              <ImageOff size={32} />
-              <p className="text-sm font-medium">No menu items available.</p>
+            <div className="cp-empty">
+              <ImageOff size={30} strokeWidth={1.5} />
+              <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+                No menu items available right now.
+              </p>
             </div>
           ) : (
             menuItems.map((item) => (
               <MenuItemCard
-                key={item.id}
+                key={String(item.id)}
                 item={item}
                 shopOwnerAddress={cleanOwner}
                 onBuy={handleBuy}

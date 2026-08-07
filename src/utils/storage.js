@@ -1,85 +1,129 @@
-export function getShopLogo(ownerAddress) {
-  return localStorage.getItem(`shop_logo_${ownerAddress}`) || null;
+/**
+ * Shop/item meta accessors — Turso-backed cache (+ R2 URL fallbacks).
+ * Call fetchShopMeta(owner) before relying on data for a shop.
+ */
+import {
+  getCachedMeta,
+  getCachedItem,
+  fetchShopMeta,
+  saveShopFields,
+  saveItemFields,
+} from './metaCache'
+
+const PUBLIC_BASE = (import.meta.env.VITE_R2_PUBLIC_BASE_URL || '').replace(/\/+$/, '')
+const DEFAULT_TAGLINE = 'Fresh food & delicious coffee served daily!'
+
+function normalizeAddr(ownerAddress) {
+  return ownerAddress ? String(ownerAddress).toLowerCase() : ''
 }
 
-export function setShopLogo(ownerAddress, dataUrl) {
-  localStorage.setItem(`shop_logo_${ownerAddress}`, dataUrl);
+export { fetchShopMeta, saveShopFields, saveItemFields }
+
+export function getShopLogo(ownerAddress) {
+  const cached = getCachedMeta(ownerAddress)?.logoUrl
+  if (cached) return cached
+  if (PUBLIC_BASE && ownerAddress) {
+    return `${PUBLIC_BASE}/logos/${normalizeAddr(ownerAddress)}.jpg`
+  }
+  return null
+}
+
+/** @deprecated prefer saveShopFields — kept for gradual migration */
+export async function setShopLogo(ownerAddress, logoUrl) {
+  return saveShopFields(ownerAddress, { logoUrl })
 }
 
 export function getShopTagline(ownerAddress) {
-  return localStorage.getItem(`shop_tagline_${ownerAddress}`) || "Fresh food & delicious coffee served daily!";
+  const cached = getCachedMeta(ownerAddress)?.tagline
+  if (cached) return cached
+  return DEFAULT_TAGLINE
 }
 
-export function setShopTagline(ownerAddress, tagline) {
-  localStorage.setItem(`shop_tagline_${ownerAddress}`, tagline);
-}
-
-export function getItemMeta(ownerAddress, itemId, key) {
-  return localStorage.getItem(`item_${key}_${ownerAddress}_${itemId}`);
-}
-
-export function setItemMeta(ownerAddress, itemId, key, value) {
-  localStorage.setItem(`item_${key}_${ownerAddress}_${itemId}`, value);
+export async function setShopTagline(ownerAddress, tagline) {
+  return saveShopFields(ownerAddress, { tagline })
 }
 
 export function isItemDeleted(ownerAddress, itemId) {
-  return localStorage.getItem(`item_deleted_${ownerAddress}_${itemId}`) === 'true';
+  return Boolean(getCachedItem(ownerAddress, itemId)?.deleted)
 }
 
 export function isItemAvailable(ownerAddress, itemId) {
-  return localStorage.getItem(`item_available_${ownerAddress}_${itemId}`) !== 'false';
+  const item = getCachedItem(ownerAddress, itemId)
+  if (!item) return true
+  return item.available !== false
 }
 
-export function setItemAvailability(ownerAddress, itemId, available) {
-  localStorage.setItem(`item_available_${ownerAddress}_${itemId}`, available.toString());
+export async function setItemAvailability(ownerAddress, itemId, available) {
+  return saveItemFields(ownerAddress, { itemId: String(itemId), available: Boolean(available) })
 }
 
-export function deleteItem(ownerAddress, itemId) {
-  localStorage.setItem(`item_deleted_${ownerAddress}_${itemId}`, 'true');
+export async function deleteItem(ownerAddress, itemId) {
+  return saveItemFields(ownerAddress, { itemId: String(itemId), deleted: true, available: false })
 }
 
 export function getItemPriceMedium(ownerAddress, itemId) {
-  const val = localStorage.getItem(`item_price_medium_${ownerAddress}_${itemId}`);
-  return val ? parseFloat(val) : null;
+  const v = getCachedItem(ownerAddress, itemId)?.priceMedium
+  return v != null ? Number(v) : null
 }
 
 export function getItemPriceLarge(ownerAddress, itemId) {
-  const val = localStorage.getItem(`item_price_large_${ownerAddress}_${itemId}`);
-  return val ? parseFloat(val) : null;
+  const v = getCachedItem(ownerAddress, itemId)?.priceLarge
+  return v != null ? Number(v) : null
 }
 
-export function setItemSizePrice(ownerAddress, itemId, size, price) {
-  localStorage.setItem(`item_price_${size}_${ownerAddress}_${itemId}`, price.toString());
+export async function setItemSizePrice(ownerAddress, itemId, size, price) {
+  const num = price === '' || price == null ? null : Number(price)
+  if (size === 'medium') {
+    return saveItemFields(ownerAddress, { itemId: String(itemId), priceMedium: num })
+  }
+  return saveItemFields(ownerAddress, { itemId: String(itemId), priceLarge: num })
 }
 
-export function setItemDesc(ownerAddress, itemId, desc) {
-  localStorage.setItem(`item_desc_${ownerAddress}_${itemId}`, desc);
+export async function setItemDesc(ownerAddress, itemId, desc) {
+  return saveItemFields(ownerAddress, { itemId: String(itemId), description: desc })
 }
 
 export function getItemDesc(ownerAddress, itemId) {
-  return localStorage.getItem(`item_desc_${ownerAddress}_${itemId}`) || "";
+  return getCachedItem(ownerAddress, itemId)?.description || ''
 }
 
-export function setItemImage(ownerAddress, itemId, img) {
-  localStorage.setItem(`item_img_${ownerAddress}_${itemId}`, img);
+export async function setItemImage(ownerAddress, itemId, img) {
+  return saveItemFields(ownerAddress, { itemId: String(itemId), imageUrl: img })
 }
 
 export function getItemImage(ownerAddress, itemId) {
-  return localStorage.getItem(`item_img_${ownerAddress}_${itemId}`) || null;
+  const cached = getCachedItem(ownerAddress, itemId)?.imageUrl
+  if (cached) return cached
+  if (PUBLIC_BASE && ownerAddress && itemId != null) {
+    return `${PUBLIC_BASE}/items/${normalizeAddr(ownerAddress)}/${itemId}.jpg`
+  }
+  return null
 }
 
-export function setItemNameOverride(ownerAddress, itemId, name) {
-  localStorage.setItem(`item_name_${ownerAddress}_${itemId}`, name);
+export async function setItemNameOverride(ownerAddress, itemId, name) {
+  return saveItemFields(ownerAddress, { itemId: String(itemId), nameOverride: name })
 }
 
 export function getItemNameOverride(ownerAddress, itemId) {
-  return localStorage.getItem(`item_name_${ownerAddress}_${itemId}`) || null;
+  return getCachedItem(ownerAddress, itemId)?.nameOverride || null
 }
 
-export function setItemPriceOverride(ownerAddress, itemId, price) {
-  localStorage.setItem(`item_price_${ownerAddress}_${itemId}`, price);
+export async function setItemPriceOverride(ownerAddress, itemId, price) {
+  return saveItemFields(ownerAddress, {
+    itemId: String(itemId),
+    priceOverride: price == null ? null : String(price),
+  })
 }
 
 export function getItemPriceOverride(ownerAddress, itemId) {
-  return localStorage.getItem(`item_price_${ownerAddress}_${itemId}`) || null;
+  return getCachedItem(ownerAddress, itemId)?.priceOverride || null
+}
+
+/** True if Turso has an image URL recorded for this item. */
+export function hasSavedItemImage(ownerAddress, itemId) {
+  return Boolean(getCachedItem(ownerAddress, itemId)?.imageUrl)
+}
+
+export function hasSavedLogo(ownerAddress) {
+  return Boolean(getCachedMeta(ownerAddress)?.logoUrl)
 }

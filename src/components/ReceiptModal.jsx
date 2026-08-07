@@ -7,90 +7,75 @@ function ReceiptModal({ receipt }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in"
-      style={{ background: 'var(--bg-overlay)', backdropFilter: 'blur(8px)' }}
+      className="cp-modal-overlay"
       role="dialog"
       aria-modal="true"
       aria-label="Payment receipt"
     >
-      <div
-        className="w-full max-w-md rounded-2xl p-6 md:p-8 shadow-2xl border animate-scale-in"
-        style={{
-          background: 'var(--bg-card)',
-          borderColor: 'var(--border-default)',
-        }}
-      >
+      <div className="cp-modal animate-scale-in">
         <div className="text-center mb-6">
           <div
             className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3"
-            style={{ background: 'oklch(0.65 0.17 155 / 0.12)' }}
+            style={{ background: 'oklch(0.68 0.12 145 / 0.14)' }}
           >
             <CheckCircle size={28} style={{ color: 'var(--color-success)' }} />
           </div>
-          <h3 className="text-xl font-black" style={{ color: 'var(--text-primary)' }}>
-            Payment Successful!
+          <h3 className="font-display text-xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+            Payment successful
           </h3>
-          <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
-            Digital Receipt from {receipt.shopName}
+          <p className="text-xs mt-1.5" style={{ color: 'var(--text-secondary)' }}>
+            Receipt from {receipt.shopName}
           </p>
         </div>
 
         <div
-          className="rounded-xl p-4 space-y-3 mb-6 border"
+          className="rounded-xl p-4 space-y-3.5 mb-6 border"
           style={{
             background: 'var(--bg-input)',
             borderColor: 'var(--border-default)',
           }}
         >
-          <div className="flex justify-between text-xs">
+          <div className="flex justify-between gap-3 text-xs">
             <span style={{ color: 'var(--text-secondary)' }}>Item</span>
-            <span className="font-bold" style={{ color: 'var(--text-primary)' }}>{receipt.itemName}</span>
+            <span className="font-semibold text-right" style={{ color: 'var(--text-primary)' }}>{receipt.itemName}</span>
           </div>
-          <div className="flex justify-between text-xs">
-            <span style={{ color: 'var(--text-secondary)' }}>Total Paid</span>
-            <span className="font-bold" style={{ color: 'var(--color-brand-500)' }}>
+          <div className="flex justify-between gap-3 text-xs">
+            <span style={{ color: 'var(--text-secondary)' }}>Total paid</span>
+            <span className="font-bold tabular-nums" style={{ color: 'var(--color-brand-400)' }}>
               {receipt.finalAmount.toFixed(2)} USDC
             </span>
           </div>
-          <div className="flex justify-between text-xs items-center">
-            <span style={{ color: 'var(--text-secondary)' }}>Tx Hash</span>
+          <div className="flex justify-between gap-3 text-xs items-center">
+            <span style={{ color: 'var(--text-secondary)' }}>Tx</span>
             <a
               href={`${arcTestnet.blockExplorers.default.url}/tx/${receipt.txHash}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1 font-mono truncate max-w-[160px] transition-colors"
-              style={{ color: 'var(--color-brand-500)' }}
+              className="flex items-center gap-1 font-mono truncate max-w-[min(11rem,45vw)]"
+              style={{ color: 'var(--color-brand-400)' }}
             >
-              {receipt.txHash.substring(0, 10)}…
-              <ExternalLink size={11} />
+              {String(receipt.txHash).substring(0, 10)}…
+              <ExternalLink size={11} className="shrink-0" />
             </a>
           </div>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-col-reverse sm:flex-row gap-2">
           <button
+            type="button"
             onClick={() => window.print()}
-            className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-xl text-xs font-semibold border transition-colors"
-            style={{
-              background: 'var(--bg-card)',
-              borderColor: 'var(--border-default)',
-              color: 'var(--text-primary)',
-            }}
+            className="cp-btn cp-btn-ghost flex-1"
           >
-            <Download size={13} />
-            Receipt
+            <Download size={14} />
+            Print
           </button>
           <button
+            type="button"
             onClick={() => window.location.reload()}
-            className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-xl text-xs font-bold transition-all duration-200 hover:scale-[1.01] active:scale-[0.99]"
-            style={{
-              background: 'linear-gradient(135deg, var(--color-brand-500), var(--color-brand-600))',
-              color: 'white',
-              boxShadow: '0 4px 12px oklch(0.65 0.19 70 / 0.2)',
-            }}
+            className="cp-btn cp-btn-primary flex-1"
           >
-            <ArrowLeft size={13} />
-            Back to Menu
+            <ArrowLeft size={14} />
+            Back to menu
           </button>
         </div>
       </div>

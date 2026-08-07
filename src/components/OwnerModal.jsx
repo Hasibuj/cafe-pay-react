@@ -3,21 +3,36 @@ import { useAccount, useReadContract, useWriteContract } from 'wagmi'
 import { ethers } from 'ethers'
 import {
   X, Store, Upload, QrCode, Tag, Plus, Pencil, Trash2, ToggleLeft, ToggleRight,
-  FileImage, DollarSign, Type, AlignLeft, Loader2, AlertCircle, Save, Ban
+  FileImage, DollarSign, Type, AlignLeft, Loader2, AlertCircle, Save, Ban,
+  CheckCircle2, Cloud, Camera,
 } from 'lucide-react'
 import {
-  setShopLogo, getShopTagline, setShopTagline,
-  getItemNameOverride, getItemPriceOverride, getItemDesc,
+  getShopTagline, getShopLogo, hasSavedLogo, hasSavedItemImage,
+  getItemNameOverride, getItemPriceOverride, getItemDesc, getItemImage,
   isItemDeleted, isItemAvailable, setItemAvailability,
   deleteItem as deleteItemStorage, setItemNameOverride,
   setItemPriceOverride, setItemDesc, setItemImage, setItemSizePrice,
+  setShopLogo, setShopTagline, fetchShopMeta,
 } from '../utils/storage'
-import { processImageFile } from '../utils/imageUtils'
-import { CONTRACT_ADDRESS, ABI_CAFEPAY } from '../config/wagmi'
+import { uploadImage, shopLogoKey, itemImageKey, formatBytes } from '../utils/imageUtils'
+import { CONTRACT_ADDRESS, ABI_CAFEPAY, arcTestnet } from '../config/wagmi'
+import { useShopMeta } from '../hooks/useShopMeta'
+import { useToast } from '../context/ToastContext'
+import ImageUploadField from './ImageUploadField'
+
+function StatusPill({ ok, label, okLabel }) {
+  return (
+    <span className={`cp-status-pill ${ok ? 'is-ok' : 'is-muted'}`}>
+      {ok ? <CheckCircle2 size={12} /> : <Cloud size={12} />}
+      {ok ? (okLabel || label) : label}
+    </span>
+  )
+}
 
 function OwnerModal({ isOpen, onClose }) {
   const { address } = useAccount()
   const { writeContractAsync } = useWriteContract()
+  const toast = useToast()
 
   const [menuItems, setMenuItems] = useState([])
   const [shopName, setShopName] = useState('')
@@ -27,23 +42,33 @@ function OwnerModal({ isOpen, onClose }) {
   const [itemPrice, setItemPrice] = useState('')
   const [itemDesc, setItemDescInput] = useState('')
   const [shopLogoFile, setShopLogoFile] = useState(null)
+  const [logoCompressInfo, setLogoCompressInfo] = useState(null)
+  const [logoFieldKey, setLogoFieldKey] = useState(0)
   const [itemImageFile, setItemImageFile] = useState(null)
+  const [itemImageFieldKey, setItemImageFieldKey] = useState(0)
   const [taglineInput, setTaglineInput] = useState('')
   const [editingItem, setEditingItem] = useState(null)
   const [editName, setEditName] = useState('')
   const [editPrice, setEditPrice] = useState('')
   const [editDesc, setEditDesc] = useState('')
+  const [editMedium, setEditMedium] = useState('')
+  const [editLarge, setEditLarge] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [busyAction, setBusyAction] = useState('')
   const [shopUrl, setShopUrl] = useState('')
   const [qrUrl, setQrUrl] = useState('')
+  const [logoPreview, setLogoPreview] = useState(null)
+  const [itemPhotoBusyId, setItemPhotoBusyId] = useState(null)
 
   const cleanAddr = address ? ethers.getAddress(address) : null
+  const { meta, reload: reloadMeta } = useShopMeta(isOpen ? cleanAddr : null)
 
   const { data: shopData, refetch: refetchShop } = useReadContract({
     address: CONTRACT_ADDRESS,
     abi: ABI_CAFEPAY,
     functionName: 'shops',
     args: cleanAddr ? [cleanAddr] : undefined,
+    chainId: arcTestnet.id,
     query: { enabled: !!cleanAddr && isOpen },
   })
 
@@ -52,6 +77,7 @@ function OwnerModal({ isOpen, onClose }) {
     abi: ABI_CAFEPAY,
     functionName: 'getShopMenu',
     args: cleanAddr ? [cleanAddr] : undefined,
+    chainId: arcTestnet.id,
     query: { enabled: !!cleanAddr && isOpen && isRegistered },
   })
 
@@ -68,38 +94,56 @@ function OwnerModal({ isOpen, onClose }) {
       const filtered = menuData.filter((item) => !isItemDeleted(cleanAddr, item.id))
       setMenuItems(filtered)
     }
-  }, [menuData, cleanAddr])
+  }, [menuData, cleanAddr, meta])
 
   useEffect(() => {
     if (isOpen && cleanAddr) {
       const url = `${window.location.origin}${window.location.pathname}?shop=${cleanAddr}`
       setShopUrl(url)
       setQrUrl(`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(url)}`)
-      setTaglineInput(getShopTagline(cleanAddr))
+      fetchShopMeta(cleanAddr).then(() => {
+        setTaglineInput(getShopTagline(cleanAddr))
+        setLogoPreview(getShopLogo(cleanAddr))
+      }).catch(() => {
+        setTaglineInput(getShopTagline(cleanAddr))
+        setLogoPreview(getShopLogo(cleanAddr))
+      })
     }
   }, [isOpen, cleanAddr])
 
   const handleRegisterShop = useCallback(async () => {
-    if (!regShopName.trim()) { alert('Please enter a shop name.'); return }
+    if (!regShopName.trim()) {
+      toast.error('Shop name required', 'Enter a restaurant name to register on-chain.')
+      return
+    }
     setIsSubmitting(true)
+    setBusyAction('register')
     try {
       await writeContractAsync({
         address: CONTRACT_ADDRESS,
         abi: ABI_CAFEPAY,
         functionName: 'registerShop',
         args: [regShopName.trim()],
+        chainId: arcTestnet.id,
       })
-      alert('Shop registered successfully!')
+      toast.success('Shop registered', 'Your shop is on Arc Testnet. You can add menu items now.')
       setRegShopName('')
       refetchShop()
     } catch (err) {
-      alert('Error: ' + (err.reason || err.message))
-    } finally { setIsSubmitting(false) }
-  }, [regShopName, writeContractAsync, refetchShop])
+      toast.error('Registration failed', err.shortMessage || err.reason || err.message)
+    } finally {
+      setIsSubmitting(false)
+      setBusyAction('')
+    }
+  }, [regShopName, writeContractAsync, refetchShop, toast])
 
   const handleAddItem = useCallback(async () => {
-    if (!itemName.trim() || !itemPrice.trim()) { alert('Please fill in item name and price.'); return }
+    if (!itemName.trim() || !itemPrice.trim()) {
+      toast.error('Missing fields', 'Item name and price (USDC) are required.')
+      return
+    }
     setIsSubmitting(true)
+    setBusyAction('add-item')
     try {
       const parsedPrice = ethers.parseUnits(itemPrice.trim(), 6)
       await writeContractAsync({
@@ -107,109 +151,221 @@ function OwnerModal({ isOpen, onClose }) {
         abi: ABI_CAFEPAY,
         functionName: 'addItem',
         args: [itemName.trim(), parsedPrice],
+        chainId: arcTestnet.id,
       })
+
+      // Wait briefly then refetch so we get the new item id
+      await new Promise((r) => setTimeout(r, 1500))
       const menu = await refetchMenu()
-      if (menu?.data?.length > 0) {
-        const newItem = menu.data[menu.data.length - 1]
-        if (itemDesc.trim()) setItemDesc(address, newItem.id, itemDesc.trim())
-        if (itemImageFile) {
-          const img = await processImageFile(itemImageFile)
-          if (img) setItemImage(address, newItem.id, img)
+      const list = menu?.data || []
+      const newItem = list.length ? list[list.length - 1] : null
+
+      const savedBits = ['On-chain item']
+      if (newItem && address) {
+        const itemId = String(newItem.id)
+        if (itemDesc.trim()) {
+          await setItemDesc(address, itemId, itemDesc.trim())
+          savedBits.push('description')
         }
+        if (itemImageFile) {
+          setBusyAction('upload-image')
+          const { url: imgUrl, compression } = await uploadImage(itemImageFile, {
+            key: itemImageKey(address, itemId),
+            preset: 'food',
+          })
+          await setItemImage(address, itemId, imgUrl)
+          savedBits.push(
+            compression?.savedPercent > 0
+              ? `image (−${compression.savedPercent}%)`
+              : 'image',
+          )
+        }
+        await reloadMeta()
       }
-      alert('Item added successfully!')
-      setItemName(''); setItemPrice(''); setItemDescInput(''); setItemImageFile(null)
+
+      toast.success(
+        'Menu item saved',
+        `${savedBits.join(' · ')} stored. ${newItem ? `Item #${newItem.id}` : ''}`.trim(),
+      )
+      setItemName('')
+      setItemPrice('')
+      setItemDescInput('')
+      setItemImageFile(null)
+      setItemImageFieldKey((k) => k + 1)
     } catch (err) {
-      alert('Error: ' + (err.reason || err.message))
-    } finally { setIsSubmitting(false) }
-  }, [itemName, itemPrice, itemDesc, itemImageFile, address, writeContractAsync, refetchMenu])
+      toast.error('Could not add item', err.shortMessage || err.reason || err.message || String(err))
+    } finally {
+      setIsSubmitting(false)
+      setBusyAction('')
+    }
+  }, [itemName, itemPrice, itemDesc, itemImageFile, address, writeContractAsync, refetchMenu, reloadMeta, toast])
 
   const handleUpdateLogo = useCallback(async () => {
-    if (!address) { alert('Please connect wallet first.'); return }
-    if (!shopLogoFile) { alert('Please select an image file.'); return }
-    const logoUrl = await processImageFile(shopLogoFile)
-    if (!logoUrl) { alert('Failed to process image.'); return }
-    setShopLogo(address, logoUrl)
-    alert('Shop logo updated successfully!')
-    setShopLogoFile(null)
-  }, [address, shopLogoFile])
+    if (!address) {
+      toast.error('Wallet required', 'Connect your wallet first.')
+      return
+    }
+    if (!shopLogoFile) {
+      toast.error('No image selected', 'Pick or change a logo first.')
+      return
+    }
+    setIsSubmitting(true)
+    setBusyAction('logo')
+    try {
+      const { url: logoUrl, compression } = await uploadImage(shopLogoFile, {
+        key: shopLogoKey(address),
+        preset: 'logo',
+      })
+      await setShopLogo(address, logoUrl)
+      setLogoPreview(`${logoUrl}${logoUrl.includes('?') ? '&' : '?'}t=${Date.now()}`)
+      setShopLogoFile(null)
+      setLogoCompressInfo(null)
+      setLogoFieldKey((k) => k + 1)
+      const sizeNote = compression
+        ? `Compressed ${formatBytes(compression.originalBytes)} → ${formatBytes(compression.compressedBytes)}.`
+        : ''
+      toast.success('Logo updated', `${sizeNote} Saved to R2 + Turso — visible to all customers.`.trim())
+      await reloadMeta()
+    } catch (err) {
+      toast.error('Logo upload failed', err.message || String(err))
+    } finally {
+      setIsSubmitting(false)
+      setBusyAction('')
+    }
+  }, [address, shopLogoFile, reloadMeta, toast])
 
-  const handleUpdateTagline = useCallback(() => {
+  const handleChangeItemPhoto = useCallback(async (itemId, file) => {
+    if (!address || !file) return
+    setItemPhotoBusyId(String(itemId))
+    try {
+      const { url, compression } = await uploadImage(file, {
+        key: itemImageKey(address, itemId),
+        preset: 'food',
+      })
+      await setItemImage(address, itemId, url)
+      await reloadMeta()
+      toast.success(
+        'Photo updated',
+        compression?.savedPercent > 0
+          ? `Saved (−${compression.savedPercent}% size). Customers see the new image.`
+          : 'Saved to R2 + Turso.',
+      )
+    } catch (err) {
+      toast.error('Photo upload failed', err.message || String(err))
+    } finally {
+      setItemPhotoBusyId(null)
+    }
+  }, [address, reloadMeta, toast])
+
+  const handleUpdateTagline = useCallback(async () => {
     if (!cleanAddr) return
     const val = taglineInput.trim()
-    if (!val) { alert('Tagline cannot be empty.'); return }
-    setShopTagline(cleanAddr, val)
-    alert('Shop tagline updated successfully!')
-  }, [cleanAddr, taglineInput])
-
-  const handleToggleAvailability = useCallback((itemId) => {
-    const current = isItemAvailable(cleanAddr, itemId)
-    setItemAvailability(cleanAddr, itemId, !current)
-    alert(current ? 'Item marked as Unavailable.' : 'Item is now Available!')
-    refetchMenu()
-  }, [cleanAddr, refetchMenu])
-
-  const handleDeleteItem = useCallback((itemId) => {
-    if (!confirm('Are you sure you want to delete this item?')) return
-    deleteItemStorage(cleanAddr, itemId)
-    alert('Item deleted successfully!')
-    refetchMenu()
-  }, [cleanAddr, refetchMenu])
-
-  const handleSaveEdit = useCallback((item) => {
-    if (!editName.trim() || !editPrice.trim()) { alert('Name and Price cannot be empty.'); return }
-    setItemNameOverride(cleanAddr, item.id, editName.trim())
-    setItemPriceOverride(cleanAddr, item.id, editPrice.trim())
-    setItemDesc(cleanAddr, item.id, editDesc.trim())
-    if (editName.toLowerCase().includes('pizza')) {
-      const mp = prompt('Enter Medium size price (USDC):', parseFloat(editPrice) + 2)
-      if (mp) setItemSizePrice(cleanAddr, item.id, 'medium', mp.trim())
-      const lp = prompt('Enter Large size price (USDC):', parseFloat(editPrice) + 5)
-      if (lp) setItemSizePrice(cleanAddr, item.id, 'large', lp.trim())
+    if (!val) {
+      toast.error('Empty tagline', 'Write a short line for your shop.')
+      return
     }
-    alert('Item updated successfully!')
-    setEditingItem(null)
-    refetchMenu()
-  }, [cleanAddr, editName, editPrice, editDesc, refetchMenu])
+    setIsSubmitting(true)
+    setBusyAction('tagline')
+    try {
+      await setShopTagline(cleanAddr, val)
+      toast.success('Tagline saved', 'Stored in Turso for all visitors.')
+      await reloadMeta()
+    } catch (err) {
+      toast.error('Could not save tagline', err.message || String(err))
+    } finally {
+      setIsSubmitting(false)
+      setBusyAction('')
+    }
+  }, [cleanAddr, taglineInput, reloadMeta, toast])
+
+  const handleToggleAvailability = useCallback(async (itemId) => {
+    if (!cleanAddr) return
+    const current = isItemAvailable(cleanAddr, itemId)
+    try {
+      await setItemAvailability(cleanAddr, itemId, !current)
+      toast.success(
+        current ? 'Marked unavailable' : 'Marked available',
+        'Visibility saved to Turso (on-chain item still exists).',
+      )
+      await reloadMeta()
+      refetchMenu()
+    } catch (err) {
+      toast.error('Update failed', err.message)
+    }
+  }, [cleanAddr, reloadMeta, refetchMenu, toast])
+
+  const handleDeleteItem = useCallback(async (itemId) => {
+    if (!cleanAddr) return
+    if (!window.confirm('Hide this item from your public menu? (Soft-delete in Turso; on-chain data remains.)')) return
+    try {
+      await deleteItemStorage(cleanAddr, itemId)
+      toast.success('Item removed', 'Hidden from customers via Turso.')
+      await reloadMeta()
+      refetchMenu()
+    } catch (err) {
+      toast.error('Delete failed', err.message)
+    }
+  }, [cleanAddr, reloadMeta, refetchMenu, toast])
+
+  const handleSaveEdit = useCallback(async (item) => {
+    if (!cleanAddr) return
+    if (!editName.trim() || !editPrice.trim()) {
+      toast.error('Name & price required', 'Fill both fields before saving.')
+      return
+    }
+    setIsSubmitting(true)
+    setBusyAction(`edit-${item.id}`)
+    try {
+      await setItemNameOverride(cleanAddr, item.id, editName.trim())
+      await setItemPriceOverride(cleanAddr, item.id, editPrice.trim())
+      await setItemDesc(cleanAddr, item.id, editDesc.trim())
+      if (editName.toLowerCase().includes('pizza')) {
+        if (editMedium !== '') await setItemSizePrice(cleanAddr, item.id, 'medium', editMedium)
+        if (editLarge !== '') await setItemSizePrice(cleanAddr, item.id, 'large', editLarge)
+      }
+      toast.success('Item updated', 'Overrides saved to Turso.')
+      setEditingItem(null)
+      await reloadMeta()
+      refetchMenu()
+    } catch (err) {
+      toast.error('Save failed', err.message)
+    } finally {
+      setIsSubmitting(false)
+      setBusyAction('')
+    }
+  }, [cleanAddr, editName, editPrice, editDesc, editMedium, editLarge, reloadMeta, refetchMenu, toast])
 
   if (!isOpen) return null
 
+  const logoSaved = cleanAddr ? hasSavedLogo(cleanAddr) : false
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
-      style={{ background: 'var(--bg-overlay)', backdropFilter: 'blur(8px)' }}
+      className="cp-modal-overlay"
+      style={{ zIndex: 60 }}
       role="dialog"
       aria-modal="true"
       aria-label="Shop Owner Dashboard"
     >
-      <div
-        className="w-full max-w-2xl rounded-2xl p-6 md:p-8 shadow-2xl border max-h-[90vh] overflow-y-auto animate-scale-in"
-        style={{
-          background: 'var(--bg-card)',
-          borderColor: 'var(--border-default)',
-        }}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b mb-6" style={{ borderColor: 'var(--border-default)' }}>
-          <div className="flex items-center gap-3">
-            <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center"
-              style={{ background: 'oklch(0.65 0.19 70 / 0.1)' }}
-            >
-              <Store size={18} style={{ color: 'var(--color-brand-500)' }} />
+      <div className="cp-modal cp-modal-wide cp-owner-modal animate-scale-in">
+        <div className="cp-owner-header">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="cp-owner-header-icon">
+              <Store size={18} />
             </div>
-            <div>
-              <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>
-                Shop Owner Dashboard
+            <div className="min-w-0">
+              <h3 className="font-display text-lg font-semibold tracking-tight truncate" style={{ color: 'var(--text-primary)' }}>
+                Owner dashboard
               </h3>
-              <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                {isRegistered ? shopName : 'Manage your restaurant & menu'}
+              <p className="text-xs truncate" style={{ color: 'var(--text-secondary)' }}>
+                {isRegistered ? shopName : 'Register & manage your shop'}
               </p>
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-lg transition-colors"
+            className="w-10 h-10 flex items-center justify-center rounded-xl shrink-0"
             style={{ background: 'var(--bg-input)', color: 'var(--text-secondary)' }}
             aria-label="Close dashboard"
           >
@@ -217,410 +373,427 @@ function OwnerModal({ isOpen, onClose }) {
           </button>
         </div>
 
-        {/* Registration Section */}
         {!isRegistered ? (
-          <div className="space-y-4 animate-fade-in">
-            <div
-              className="flex items-start gap-3 p-4 rounded-xl border text-xs leading-relaxed"
-              style={{
-                background: 'oklch(0.65 0.19 70 / 0.06)',
-                borderColor: 'oklch(0.65 0.19 70 / 0.15)',
-                color: 'var(--color-brand-600)',
-              }}
-            >
-              <AlertCircle size={16} className="mt-0.5 shrink-0" />
-              <span>
-                You have not registered a shop yet on the blockchain. Register now to start adding menu items and accepting USDC payments.
-              </span>
+          <div className="cp-owner-stack animate-fade-in">
+            <div className="cp-owner-callout">
+              <AlertCircle size={16} className="shrink-0 mt-0.5" />
+              <p>
+                Register your shop on Arc Testnet to add menu items and accept USDC.
+                Off-chain details (logos, taglines, photos) save to Turso + R2.
+              </p>
             </div>
-
-            <div>
-              <label className="block text-[11px] font-semibold mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                Restaurant Name
-              </label>
+            <div className="cp-owner-section">
+              <label className="cp-owner-label">Restaurant name</label>
               <input
                 type="text"
                 placeholder="e.g. Gourmet Burger Hub"
                 value={regShopName}
                 onChange={(e) => setRegShopName(e.target.value)}
-                className="w-full text-xs rounded-xl px-3.5 py-3 border transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1"
-                style={{
-                  background: 'var(--bg-input)',
-                  borderColor: 'var(--border-default)',
-                  color: 'var(--text-primary)',
-                  '--tw-ring-color': 'var(--color-brand-400)',
-                }}
+                className="cp-input"
               />
+              <button
+                type="button"
+                onClick={handleRegisterShop}
+                disabled={isSubmitting}
+                className="cp-btn cp-btn-primary w-full mt-4"
+              >
+                {busyAction === 'register' ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                {busyAction === 'register' ? 'Registering…' : 'Register shop on-chain'}
+              </button>
             </div>
-
-            <button
-              onClick={handleRegisterShop}
-              disabled={isSubmitting}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold transition-all duration-200 disabled:opacity-50"
-              style={{
-                background: 'linear-gradient(135deg, var(--color-brand-500), var(--color-brand-600))',
-                color: 'white',
-                boxShadow: '0 4px 12px oklch(0.65 0.19 70 / 0.2)',
-              }}
-            >
-              {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-              {isSubmitting ? 'Registering...' : 'Register Shop on Blockchain'}
-            </button>
           </div>
         ) : (
-          <div className="space-y-5 animate-fade-in">
-            {/* Shop Settings */}
-            <div
-              className="p-5 rounded-xl border space-y-4"
-              style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)' }}
-            >
-              <h4 className="font-bold text-sm flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-                <Upload size={15} />
-                Shop Settings & Logo
-              </h4>
-              <div>
-                <label className="block text-[11px] font-semibold mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                  Update Shop Logo
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => setShopLogoFile(e.target.files?.[0] || null)}
-                    className="flex-1 text-xs rounded-xl px-3 py-2 border"
-                    style={{
-                      background: 'var(--bg-card)',
-                      borderColor: 'var(--border-default)',
-                      color: 'var(--text-primary)',
-                    }}
+          <div className="cp-owner-stack animate-fade-in">
+            {/* Branding */}
+            <section className="cp-owner-section">
+              <div className="cp-owner-section-head">
+                <h4>
+                  <Upload size={15} />
+                  Branding
+                </h4>
+                <div className="flex flex-wrap gap-1.5">
+                  <StatusPill ok={logoSaved} label="Logo not saved" okLabel="Logo saved" />
+                  <StatusPill
+                    ok={Boolean(meta?.tagline)}
+                    label="Tagline not set"
+                    okLabel="Tagline saved"
                   />
+                </div>
+              </div>
+
+              <div className="cp-owner-brand-grid">
+                <ImageUploadField
+                  key={logoFieldKey}
+                  label="Shop logo"
+                  hint="Click Change anytime to replace. Max 5MB — we compress automatically."
+                  valueUrl={logoPreview}
+                  preset="logo"
+                  aspect="1 / 1"
+                  disabled={isSubmitting}
+                  busy={busyAction === 'logo'}
+                  busyLabel="Saving…"
+                  onFileReady={(file, result) => {
+                    setShopLogoFile(file)
+                    setLogoCompressInfo(result || null)
+                    if (result?.dataUrl) setLogoPreview(result.dataUrl)
+                  }}
+                  onClearPending={() => {
+                    setShopLogoFile(null)
+                    setLogoCompressInfo(null)
+                    setLogoPreview(getShopLogo(cleanAddr))
+                  }}
+                />
+                <div className="cp-owner-brand-actions">
+                  <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                    Logo is stored in R2 and indexed in Turso so every visitor sees the same branding.
+                    {logoCompressInfo ? (
+                      <>
+                        {' '}Ready: {formatBytes(logoCompressInfo.originalBytes)}
+                        {logoCompressInfo.savedPercent > 0
+                          ? ` → ${formatBytes(logoCompressInfo.compressedBytes)} (−${logoCompressInfo.savedPercent}%)`
+                          : ''}
+                        .
+                      </>
+                    ) : null}
+                  </p>
                   <button
+                    type="button"
                     onClick={handleUpdateLogo}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold border transition-colors"
-                    style={{
-                      background: 'var(--bg-card)',
-                      borderColor: 'var(--border-default)',
-                      color: 'var(--text-primary)',
-                    }}
+                    disabled={isSubmitting || !shopLogoFile}
+                    className="cp-btn cp-btn-primary w-full"
                   >
-                    <Upload size={12} />
-                    Upload
+                    {busyAction === 'logo' ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                    {busyAction === 'logo'
+                      ? 'Uploading…'
+                      : logoSaved
+                        ? 'Save new logo'
+                        : 'Upload & save logo'}
                   </button>
                 </div>
               </div>
-            </div>
 
-            {/* Add Menu Item */}
-            <div
-              className="p-5 rounded-xl border space-y-4"
-              style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)' }}
-            >
-              <h4 className="font-bold text-sm flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-                <Plus size={15} />
-                Add New Menu Item
-              </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="flex items-center gap-1 text-[11px] font-semibold mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                    <Type size={11} /> Item Name
+              <div className="cp-owner-divider" />
+
+              <label className="cp-owner-label flex items-center gap-1.5">
+                <Tag size={12} /> Shop tagline
+              </label>
+              <div className="flex flex-col sm:flex-row gap-2.5">
+                <input
+                  type="text"
+                  value={taglineInput}
+                  onChange={(e) => setTaglineInput(e.target.value)}
+                  className="cp-input flex-1"
+                  placeholder="Fresh food & delicious coffee…"
+                />
+                <button
+                  type="button"
+                  onClick={handleUpdateTagline}
+                  disabled={isSubmitting}
+                  className="cp-btn cp-btn-primary shrink-0"
+                >
+                  {busyAction === 'tagline' ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                  Save tagline
+                </button>
+              </div>
+            </section>
+
+            {/* Add item */}
+            <section className="cp-owner-section">
+              <div className="cp-owner-section-head">
+                <h4>
+                  <Plus size={15} />
+                  Add menu item
+                </h4>
+                <span className="text-[0.65rem]" style={{ color: 'var(--text-tertiary)' }}>
+                  On-chain price · off-chain photo/desc
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div className="space-y-1.5">
+                  <label className="cp-owner-label flex items-center gap-1">
+                    <Type size={11} /> Name
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. Special Pepperoni Pizza"
+                    placeholder="e.g. Pepperoni Pizza"
                     value={itemName}
                     onChange={(e) => setItemName(e.target.value)}
-                    className="w-full text-xs rounded-xl px-3.5 py-3 border transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1"
-                    style={{
-                      background: 'var(--bg-card)',
-                      borderColor: 'var(--border-default)',
-                      color: 'var(--text-primary)',
-                      '--tw-ring-color': 'var(--color-brand-400)',
-                    }}
+                    className="cp-input !text-sm"
                   />
                 </div>
-                <div>
-                  <label className="flex items-center gap-1 text-[11px] font-semibold mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                    <DollarSign size={11} /> Base Price (USDC)
+                <div className="space-y-1.5">
+                  <label className="cp-owner-label flex items-center gap-1">
+                    <DollarSign size={11} /> Price (USDC)
                   </label>
                   <input
                     type="number"
-                    placeholder="e.g. 10.0"
+                    placeholder="10.00"
                     value={itemPrice}
                     onChange={(e) => setItemPrice(e.target.value)}
-                    className="w-full text-xs rounded-xl px-3.5 py-3 border transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1"
-                    style={{
-                      background: 'var(--bg-card)',
-                      borderColor: 'var(--border-default)',
-                      color: 'var(--text-primary)',
-                      '--tw-ring-color': 'var(--color-brand-400)',
-                    }}
+                    className="cp-input !text-sm"
                   />
                 </div>
               </div>
-              <div>
-                <label className="flex items-center gap-1 text-[11px] font-semibold mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+
+              <div className="space-y-1.5 mt-3.5">
+                <label className="cp-owner-label flex items-center gap-1">
                   <AlignLeft size={11} /> Description
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Freshly baked with extra mozzarella cheese"
+                  placeholder="Short description for customers"
                   value={itemDesc}
                   onChange={(e) => setItemDescInput(e.target.value)}
-                  className="w-full text-xs rounded-xl px-3.5 py-3 border transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1"
-                  style={{
-                    background: 'var(--bg-card)',
-                    borderColor: 'var(--border-default)',
-                    color: 'var(--text-primary)',
-                    '--tw-ring-color': 'var(--color-brand-400)',
-                  }}
+                  className="cp-input !text-sm"
                 />
               </div>
-              <div>
-                <label className="flex items-center gap-1 text-[11px] font-semibold mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                  <FileImage size={11} /> Food Image
-                </label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => setItemImageFile(e.target.files?.[0] || null)}
-                  className="w-full text-xs rounded-xl px-3 py-2 border"
-                  style={{
-                    background: 'var(--bg-card)',
-                    borderColor: 'var(--border-default)',
-                    color: 'var(--text-primary)',
-                  }}
+
+              <div className="mt-3.5">
+                <ImageUploadField
+                  key={itemImageFieldKey}
+                  label="Food photo"
+                  hint="Optional. Max 5MB — compressed before upload."
+                  preset="food"
+                  aspect="16 / 10"
+                  disabled={isSubmitting}
+                  busy={busyAction === 'upload-image'}
+                  busyLabel="Uploading…"
+                  onFileReady={(file) => setItemImageFile(file)}
+                  onClearPending={() => setItemImageFile(null)}
                 />
               </div>
+
               <button
+                type="button"
                 onClick={handleAddItem}
                 disabled={isSubmitting}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold transition-all duration-200 disabled:opacity-50"
-                style={{
-                  background: 'linear-gradient(135deg, var(--color-brand-500), var(--color-brand-600))',
-                  color: 'white',
-                  boxShadow: '0 4px 12px oklch(0.65 0.19 70 / 0.2)',
-                }}
+                className="cp-btn cp-btn-primary w-full mt-4"
               >
-                {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-                {isSubmitting ? 'Adding...' : 'Add Item to Menu'}
+                {(busyAction === 'add-item' || busyAction === 'upload-image')
+                  ? <Loader2 size={14} className="animate-spin" />
+                  : <Plus size={14} />}
+                {busyAction === 'upload-image'
+                  ? 'Uploading image…'
+                  : busyAction === 'add-item'
+                    ? 'Saving on-chain…'
+                    : 'Add item (chain + cloud)'}
               </button>
-            </div>
+            </section>
 
-            {/* QR Code & Tagline */}
-            <div
-              className="p-5 rounded-xl border text-center space-y-4"
-              style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)' }}
-            >
-              <h4 className="font-bold text-sm flex items-center justify-center gap-2" style={{ color: 'var(--text-primary)' }}>
-                <QrCode size={15} />
-                Shop QR Code & Link
-              </h4>
-              <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                Customers can scan this to view your menu directly.
-              </p>
-              <div className="flex justify-center">
-                <img
-                  src={qrUrl}
-                  alt="Shop QR Code"
-                  className="w-36 h-36 rounded-xl border p-2"
-                  style={{ borderColor: 'var(--border-default)', background: 'white' }}
-                />
+            {/* QR */}
+            <section className="cp-owner-section cp-owner-section-center">
+              <div className="cp-owner-section-head justify-center">
+                <h4>
+                  <QrCode size={15} />
+                  Customer link
+                </h4>
               </div>
+              <p className="text-xs mb-3" style={{ color: 'var(--text-secondary)' }}>
+                Share this so guests open your menu directly.
+              </p>
+              <img
+                src={qrUrl}
+                alt="Shop QR Code"
+                className="w-36 h-36 rounded-xl border p-2 mx-auto"
+                style={{ borderColor: 'var(--border-default)', background: 'white' }}
+              />
               <input
                 type="text"
                 readOnly
                 value={shopUrl}
                 onClick={(e) => e.target.select()}
-                className="w-full text-xs rounded-xl px-3 py-2.5 border text-center font-mono select-all"
-                style={{
-                  background: 'var(--bg-card)',
-                  borderColor: 'var(--border-default)',
-                  color: 'var(--text-secondary)',
-                }}
+                className="cp-input !text-xs !text-center font-mono mt-3"
                 aria-label="Shop URL"
               />
-              <div className="text-left space-y-1.5">
-                <label className="flex items-center gap-1 text-[11px] font-semibold" style={{ color: 'var(--text-secondary)' }}>
-                  <Tag size={11} /> Shop Tagline
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={taglineInput}
-                    onChange={(e) => setTaglineInput(e.target.value)}
-                    className="flex-1 text-xs rounded-xl px-3 py-2.5 border transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1"
-                    style={{
-                      background: 'var(--bg-card)',
-                      borderColor: 'var(--border-default)',
-                      color: 'var(--text-primary)',
-                      '--tw-ring-color': 'var(--color-brand-400)',
-                    }}
-                  />
-                  <button
-                    onClick={handleUpdateTagline}
-                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-semibold transition-colors"
-                    style={{
-                      background: 'var(--color-brand-500)',
-                      color: 'white',
-                    }}
-                  >
-                    <Save size={12} />
-                    Save
-                  </button>
-                </div>
-              </div>
-            </div>
+            </section>
 
-            {/* Menu Items */}
-            <div className="border-t pt-5 space-y-3" style={{ borderColor: 'var(--border-default)' }}>
-              <h4 className="font-bold text-sm flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-                <Store size={15} />
-                Manage Menu Items
-              </h4>
+            {/* Manage menu */}
+            <section className="cp-owner-section">
+              <div className="cp-owner-section-head">
+                <h4>
+                  <Store size={15} />
+                  Your menu
+                </h4>
+                <span className="text-[0.7rem] tabular-nums" style={{ color: 'var(--text-tertiary)' }}>
+                  {menuItems.length} item{menuItems.length === 1 ? '' : 's'}
+                </span>
+              </div>
+
               {menuItems.length === 0 ? (
-                <p className="text-xs text-center py-6" style={{ color: 'var(--text-tertiary)' }}>
-                  No items added yet.
+                <p className="text-xs text-center py-8" style={{ color: 'var(--text-tertiary)' }}>
+                  No items yet — add one above.
                 </p>
               ) : (
-                <div className="space-y-2">
+                <ul className="cp-owner-item-list">
                   {menuItems.map((item) => {
                     const available = isItemAvailable(cleanAddr, item.id)
                     const currentName = getItemNameOverride(cleanAddr, item.id) || item.name
                     const currentPrice = getItemPriceOverride(cleanAddr, item.id) || ethers.formatUnits(item.price, 6)
                     const currentDesc = getItemDesc(cleanAddr, item.id)
+                    const imgOk = hasSavedItemImage(cleanAddr, item.id)
+                    const imgUrl = getItemImage(cleanAddr, item.id)
                     const isEditing = editingItem === item.id
+                    const editingBusy = busyAction === `edit-${item.id}`
 
                     return (
-                      <div
-                        key={item.id}
-                        className="p-4 rounded-xl border transition-colors"
-                        style={{
-                          background: 'var(--bg-card)',
-                          borderColor: 'var(--border-default)',
-                        }}
-                      >
+                      <li key={String(item.id)} className="cp-owner-item">
                         {isEditing ? (
                           <div className="space-y-3">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                              <div>
-                                <label className="block text-[10px] mb-1" style={{ color: 'var(--text-tertiary)' }}>Name</label>
+                              <div className="space-y-1">
+                                <label className="cp-owner-label">Name</label>
                                 <input
                                   type="text"
                                   value={editName}
                                   onChange={(e) => setEditName(e.target.value)}
-                                  className="w-full text-xs rounded-lg px-2.5 py-2 border"
-                                  style={{
-                                    background: 'var(--bg-input)',
-                                    borderColor: 'var(--border-default)',
-                                    color: 'var(--text-primary)',
-                                  }}
+                                  className="cp-input !text-sm !min-h-10"
                                 />
                               </div>
-                              <div>
-                                <label className="block text-[10px] mb-1" style={{ color: 'var(--text-tertiary)' }}>Price (USDC)</label>
+                              <div className="space-y-1">
+                                <label className="cp-owner-label">Price (USDC)</label>
                                 <input
                                   type="number"
                                   value={editPrice}
                                   onChange={(e) => setEditPrice(e.target.value)}
-                                  className="w-full text-xs rounded-lg px-2.5 py-2 border"
-                                  style={{
-                                    background: 'var(--bg-input)',
-                                    borderColor: 'var(--border-default)',
-                                    color: 'var(--text-primary)',
-                                  }}
+                                  className="cp-input !text-sm !min-h-10"
                                 />
                               </div>
                             </div>
-                            <div>
-                              <label className="block text-[10px] mb-1" style={{ color: 'var(--text-tertiary)' }}>Description</label>
+                            <div className="space-y-1">
+                              <label className="cp-owner-label">Description</label>
                               <input
                                 type="text"
                                 value={editDesc}
                                 onChange={(e) => setEditDesc(e.target.value)}
-                                className="w-full text-xs rounded-lg px-2.5 py-2 border"
-                                style={{
-                                  background: 'var(--bg-input)',
-                                  borderColor: 'var(--border-default)',
-                                  color: 'var(--text-primary)',
-                                }}
+                                className="cp-input !text-sm !min-h-10"
                               />
                             </div>
-                            <div className="flex gap-1.5">
+                            {editName.toLowerCase().includes('pizza') && (
+                              <div className="grid grid-cols-2 gap-2.5">
+                                <div className="space-y-1">
+                                  <label className="cp-owner-label">Medium USDC</label>
+                                  <input
+                                    type="number"
+                                    value={editMedium}
+                                    onChange={(e) => setEditMedium(e.target.value)}
+                                    className="cp-input !text-sm !min-h-10"
+                                    placeholder="Optional"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="cp-owner-label">Large USDC</label>
+                                  <input
+                                    type="number"
+                                    value={editLarge}
+                                    onChange={(e) => setEditLarge(e.target.value)}
+                                    className="cp-input !text-sm !min-h-10"
+                                    placeholder="Optional"
+                                  />
+                                </div>
+                              </div>
+                            )}
+                            <div className="flex flex-wrap gap-2">
                               <button
+                                type="button"
                                 onClick={() => handleSaveEdit(item)}
-                                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
-                                style={{
-                                  background: 'oklch(0.65 0.17 155 / 0.1)',
-                                  color: 'var(--color-success)',
-                                }}
+                                disabled={editingBusy}
+                                className="cp-btn cp-btn-primary !min-h-9 !text-xs"
                               >
-                                <Save size={11} /> Save
+                                {editingBusy ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                                Save to Turso
                               </button>
                               <button
+                                type="button"
                                 onClick={() => setEditingItem(null)}
-                                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
-                                style={{
-                                  background: 'var(--bg-input)',
-                                  color: 'var(--text-secondary)',
-                                }}
+                                className="cp-btn cp-btn-ghost !min-h-9 !text-xs"
                               >
-                                <Ban size={11} /> Cancel
+                                <Ban size={12} /> Cancel
                               </button>
                             </div>
                           </div>
                         ) : (
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="text-sm font-bold flex items-center gap-2 flex-wrap" style={{ color: 'var(--text-primary)' }}>
-                                {currentName}
-                                <span
-                                  className="text-[10px] font-semibold px-2 py-0.5 rounded-md"
-                                  style={available
-                                    ? { background: 'oklch(0.65 0.17 155 / 0.1)', color: 'var(--color-success)' }
-                                    : { background: 'oklch(0.60 0.18 25 / 0.1)', color: 'var(--color-error)' }
-                                  }
-                                >
-                                  {available ? 'Available' : 'Unavailable'}
+                          <div className="flex gap-3">
+                            <label className="cp-owner-item-thumb is-editable" title="Change photo">
+                              {itemPhotoBusyId === String(item.id) ? (
+                                <Loader2 size={16} className="animate-spin" style={{ color: 'var(--color-brand-400)' }} />
+                              ) : imgUrl && imgOk ? (
+                                <img src={imgUrl} alt="" />
+                              ) : (
+                                <FileImage size={16} style={{ color: 'var(--text-tertiary)' }} />
+                              )}
+                              <span className="cp-owner-item-thumb-badge">
+                                <Camera size={11} />
+                              </span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="sr-only"
+                                disabled={itemPhotoBusyId != null}
+                                onChange={(e) => {
+                                  const f = e.target.files?.[0]
+                                  e.target.value = ''
+                                  if (f) handleChangeItemPhoto(item.id, f)
+                                }}
+                              />
+                            </label>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                                  {currentName}
+                                </p>
+                                <span className={`cp-mini-badge ${available ? 'is-on' : 'is-off'}`}>
+                                  {available ? 'Available' : 'Hidden'}
                                 </span>
-                              </p>
-                              {currentDesc && (
-                                <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--text-secondary)' }}>
+                                <StatusPill ok={imgOk} label="No image" okLabel="Image saved" />
+                              </div>
+                              {currentDesc ? (
+                                <p className="text-xs mt-1 line-clamp-2" style={{ color: 'var(--text-secondary)' }}>
                                   {currentDesc}
                                 </p>
+                              ) : (
+                                <p className="text-[0.65rem] mt-1" style={{ color: 'var(--text-tertiary)' }}>
+                                  No description in Turso
+                                </p>
                               )}
-                              <p className="text-xs font-semibold mt-1" style={{ color: 'var(--color-brand-500)' }}>
+                              <p className="text-xs font-semibold mt-1.5 tabular-nums" style={{ color: 'var(--color-brand-400)' }}>
                                 {currentPrice} USDC
                               </p>
                             </div>
-                            <div className="flex items-center gap-1 shrink-0">
+                            <div className="flex items-start gap-0.5 shrink-0">
                               <button
+                                type="button"
                                 onClick={() => handleToggleAvailability(item.id)}
-                                className="p-1.5 rounded-lg transition-colors"
+                                className="p-2 rounded-lg"
                                 style={{ color: available ? 'var(--color-warning)' : 'var(--color-success)' }}
-                                title={available ? 'Mark Unavailable' : 'Mark Available'}
-                                aria-label={available ? `Mark ${currentName} as unavailable` : `Mark ${currentName} as available`}
+                                title={available ? 'Hide item' : 'Show item'}
+                                aria-label={available ? `Hide ${currentName}` : `Show ${currentName}`}
                               >
                                 {available ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
                               </button>
                               <button
+                                type="button"
                                 onClick={() => {
                                   setEditingItem(item.id)
                                   setEditName(currentName)
-                                  setEditPrice(currentPrice)
+                                  setEditPrice(String(currentPrice))
                                   setEditDesc(currentDesc)
+                                  setEditMedium('')
+                                  setEditLarge('')
                                 }}
-                                className="p-1.5 rounded-lg transition-colors"
+                                className="p-2 rounded-lg"
                                 style={{ color: 'var(--text-secondary)' }}
-                                title="Edit item"
+                                title="Edit"
                                 aria-label={`Edit ${currentName}`}
                               >
                                 <Pencil size={14} />
                               </button>
                               <button
+                                type="button"
                                 onClick={() => handleDeleteItem(item.id)}
-                                className="p-1.5 rounded-lg transition-colors"
+                                className="p-2 rounded-lg"
                                 style={{ color: 'var(--color-error)' }}
-                                title="Delete item"
+                                title="Remove from menu"
                                 aria-label={`Delete ${currentName}`}
                               >
                                 <Trash2 size={14} />
@@ -628,12 +801,12 @@ function OwnerModal({ isOpen, onClose }) {
                             </div>
                           </div>
                         )}
-                      </div>
+                      </li>
                     )
                   })}
-                </div>
+                </ul>
               )}
-            </div>
+            </section>
           </div>
         )}
       </div>

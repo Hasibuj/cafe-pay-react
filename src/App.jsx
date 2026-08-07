@@ -3,6 +3,7 @@ import { WagmiProvider } from 'wagmi'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { config } from './config/wagmi'
 import { WalletStoreProvider } from './context/WalletStoreContext'
+import { ToastProvider } from './context/ToastContext'
 import Header from './components/Header'
 import HeroBanner from './components/HeroBanner'
 import Footer from './components/Footer'
@@ -31,6 +32,7 @@ function AppInner() {
     window.history.pushState({}, '', `?shop=${address}`)
     setSelectedShopAddress(address)
     setCurrentView('store')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [])
 
   const handleBackToDirectory = useCallback(() => {
@@ -44,11 +46,11 @@ function AppInner() {
   }, [])
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: 'var(--bg-app)' }}>
+    <div className="cp-shell">
       <Header onOpenOwnerModal={handleOpenOwnerModal} />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        <HeroBanner />
+      <main className="cp-main">
+        {currentView === 'directory' && <HeroBanner />}
 
         {currentView === 'directory' ? (
           <DirectoryPage onOpenStore={handleOpenStore} />
@@ -76,7 +78,9 @@ export default function App() {
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
         <WalletStoreProvider>
-          <AppInner />
+          <ToastProvider>
+            <AppInner />
+          </ToastProvider>
         </WalletStoreProvider>
       </QueryClientProvider>
     </WagmiProvider>
