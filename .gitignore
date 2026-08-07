@@ -12,6 +12,14 @@ dist
 dist-ssr
 *.local
 
+# Env & secrets
+.env
+.env.*
+!.env.example
+
+# Agent memory (do not commit)
+**/CONTEXT.md
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

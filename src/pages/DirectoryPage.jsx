@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { useReadContract } from 'wagmi'
-import { ethers } from 'ethers'
-import { Coffee, AlertTriangle } from 'lucide-react'
+import { Coffee, AlertTriangle, RefreshCw } from 'lucide-react'
 import SearchBar from '../components/SearchBar'
 import CategoryFilter from '../components/CategoryFilter'
 import ShopCard from '../components/ShopCard'
-import { CONTRACT_ADDRESS, ABI_CAFEPAY } from '../config/wagmi'
+import { fetchShopDirectory } from '../utils/rpc'
+import { fetchShopMeta } from '../utils/storage'
+import { useMetaVersion } from '../hooks/useShopMeta'
 
 function assignCategory(shopName) {
   const lower = shopName.toLowerCase()
@@ -20,63 +20,40 @@ function DirectoryPage({ onOpenStore }) {
   const [error, setError] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
+  useMetaVersion() // re-render cards when Turso meta arrives
 
-  const { data: allShopAddresses, isLoading: addressesLoading } = useReadContract({
-    address: CONTRACT_ADDRESS,
-    abi: ABI_CAFEPAY,
-    functionName: 'getAllShops',
-  })
+  const loadShops = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      // Public Arc RPC — no wallet connection required
+      const loaded = await fetchShopDirectory()
+      const mapped = loaded.map((s) => ({
+        ...s,
+        category: assignCategory(s.name),
+      }))
+      setShops(mapped)
+      // Prefetch Turso logos/taglines (non-blocking)
+      mapped.forEach((s) => {
+        fetchShopMeta(s.address).catch(() => {})
+      })
+    } catch (err) {
+      console.error('Error loading directory:', err)
+      setError('Could not load shops from Arc RPC. Check your network and try again.')
+      setShops([])
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
-    let cancelled = false
-
-    async function loadShops() {
-      if (!allShopAddresses || allShopAddresses.length === 0) {
-        if (!cancelled) { setShops([]); setLoading(false) }
-        return
-      }
-
-      setLoading(true)
-      try {
-        const readOnlyProvider = new (await import('ethers')).ethers.JsonRpcProvider(
-          'https://rpc.blockdaemon.testnet.arc.io'
-        )
-        const contract = new (await import('ethers')).ethers.Contract(
-          CONTRACT_ADDRESS,
-          ['function shops(address) external view returns (string shopName, address ownerAddress, bool exists)'],
-          readOnlyProvider
-        )
-
-        const loaded = []
-        for (const ownerAddr of allShopAddresses) {
-          try {
-            const cleanAddr = ethers.getAddress(ownerAddr)
-            const shop = await contract.shops(cleanAddr)
-            if (shop && (shop.exists || shop[2])) {
-              const name = shop.shopName || shop[0]
-              if (name) loaded.push({ address: cleanAddr, name, category: assignCategory(name) })
-            }
-          } catch (e) {
-            console.error('Error parsing shop:', e)
-          }
-        }
-        if (!cancelled) setShops(loaded)
-      } catch (err) {
-        console.error('Error loading directory:', err)
-        if (!cancelled) setError('Failed to load restaurants.')
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-
-    if (!addressesLoading) loadShops()
-    return () => { cancelled = true }
-  }, [allShopAddresses, addressesLoading])
+    loadShops()
+  }, [loadShops])
 
   const filteredShops = useMemo(() => {
-    const q = searchQuery.toLowerCase()
+    const q = searchQuery.toLowerCase().trim()
     return shops.filter((s) => {
-      const matchSearch = s.name.toLowerCase().includes(q)
+      const matchSearch = !q || s.name.toLowerCase().includes(q)
       const matchCat = activeCategory === 'all' || s.category === activeCategory
       return matchSearch && matchCat
     })
@@ -85,56 +62,82 @@ function DirectoryPage({ onOpenStore }) {
   const handleSearch = useCallback((v) => setSearchQuery(v), [])
   const handleCategory = useCallback((c) => setActiveCategory(c), [])
 
+  const countLabel = loading
+    ? 'Loading from Arc RPC…'
+    : error
+      ? 'Unable to load'
+      : `${filteredShops.length} place${filteredShops.length === 1 ? '' : 's'}${
+          searchQuery || activeCategory !== 'all' ? ' match' : ' on directory'
+        }`
+
   return (
-    <section className="space-y-5 animate-fade-in">
-      <div
-        className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-2xl border"
-        style={{
-          background: 'var(--bg-card)',
-          borderColor: 'var(--border-default)',
-        }}
-      >
+    <section className="cp-directory animate-fade-in" aria-labelledby="directory-heading">
+      <header className="cp-directory-head">
+        <div className="min-w-0">
+          <h2 id="directory-heading" className="cp-h2" style={{ color: 'var(--text-primary)' }}>
+            Nearby shops
+          </h2>
+          <p className="cp-directory-meta" style={{ color: 'var(--text-secondary)' }}>
+            {countLabel}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={loadShops}
+          disabled={loading}
+          className="cp-btn cp-btn-ghost !min-h-10 !text-xs shrink-0"
+          aria-label="Refresh shop list"
+        >
+          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          Refresh
+        </button>
+      </header>
+
+      <div className="cp-panel cp-toolbar">
         <SearchBar value={searchQuery} onChange={handleSearch} />
         <CategoryFilter activeCategory={activeCategory} onCategoryChange={handleCategory} />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {loading || addressesLoading ? (
-          <div
-            className="col-span-3 flex flex-col items-center justify-center py-20 gap-3"
-            style={{ color: 'var(--text-tertiary)' }}
-          >
-            <div className="w-8 h-8 border-2 rounded-full animate-spin" style={{ borderColor: 'var(--border-default)', borderTopColor: 'var(--color-brand-500)' }} />
-            <p className="text-sm font-medium">Loading restaurants from blockchain…</p>
+      <div className="cp-directory-results" aria-live="polite">
+        {loading ? (
+          <div className="cp-empty">
+            <div className="cp-spinner" aria-hidden />
+            <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+              Reading restaurants from the chain…
+            </p>
+            <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+              No wallet needed — public RPC
+            </p>
           </div>
         ) : error ? (
-          <div
-            className="col-span-3 flex flex-col items-center justify-center py-20 gap-3"
-            style={{ color: 'var(--color-error)' }}
-          >
-            <AlertTriangle size={32} />
-            <p className="text-sm font-medium">{error}</p>
+          <div className="cp-empty" style={{ color: 'var(--color-error)' }}>
+            <AlertTriangle size={30} strokeWidth={1.5} />
+            <p className="text-sm font-medium max-w-sm">{error}</p>
+            <button type="button" onClick={loadShops} className="cp-btn cp-btn-primary !min-h-10 !text-xs mt-1">
+              Try again
+            </button>
           </div>
         ) : filteredShops.length === 0 ? (
-          <div
-            className="col-span-3 flex flex-col items-center justify-center py-20 gap-3"
-            style={{ color: 'var(--text-tertiary)' }}
-          >
-            <Coffee size={32} />
-            <p className="text-sm font-medium">
-              {shops.length === 0 ? 'No restaurants found.' : 'No restaurants match your search.'}
+          <div className="cp-empty">
+            <Coffee size={30} strokeWidth={1.5} />
+            <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+              {shops.length === 0
+                ? 'No restaurants yet — connect a wallet and register the first shop.'
+                : 'Nothing matches that search.'}
             </p>
           </div>
         ) : (
-          filteredShops.map((shop) => (
-            <ShopCard
-              key={shop.address}
-              shopAddress={shop.address}
-              shopName={shop.name}
-              category={shop.category}
-              onClick={onOpenStore}
-            />
-          ))
+          <div className="cp-grid-shops">
+            {filteredShops.map((shop) => (
+              <ShopCard
+                key={shop.address}
+                shopAddress={shop.address}
+                shopName={shop.name}
+                category={shop.category}
+                onClick={onOpenStore}
+              />
+            ))}
+          </div>
         )}
       </div>
     </section>

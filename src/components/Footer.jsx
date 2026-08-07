@@ -4,20 +4,40 @@ import { Coffee } from 'lucide-react'
 function Footer() {
   return (
     <footer
-      className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 mt-12 border-t"
-      style={{ borderColor: 'var(--border-default)' }}
+      className="cp-footer mt-auto"
+      style={{ paddingBottom: 'max(1.25rem, var(--safe-bottom))' }}
     >
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Coffee size={14} style={{ color: 'var(--color-brand-500)' }} />
-          <p className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
-            &copy; 2026 CafePay. Powered by Arc Testnet & USDC.
-          </p>
-        </div>
-        <div className="flex items-center gap-4 text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-          <span>Built with Ethereum</span>
-          <span className="w-1 h-1 rounded-full" style={{ background: 'var(--text-tertiary)' }} />
-          <span>USDC Payments</span>
+      <div className="cp-container py-7 sm:py-8">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div
+              className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
+              style={{
+                background: 'oklch(0.55 0.1 50 / 0.14)',
+              }}
+            >
+              <Coffee size={14} style={{ color: 'var(--color-brand-400)' }} />
+            </div>
+            <div>
+              <p className="font-display text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                CafePay
+              </p>
+              <p className="text-xs mt-0.5 max-w-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                On-chain cafe directory. Menu prices & payments in USDC on Arc Testnet.
+              </p>
+            </div>
+          </div>
+
+          <div
+            className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.7rem] font-medium"
+            style={{ color: 'var(--text-tertiary)' }}
+          >
+            <span>© {new Date().getFullYear()}</span>
+            <span aria-hidden style={{ opacity: 0.4 }}>·</span>
+            <span>Arc Testnet</span>
+            <span aria-hidden style={{ opacity: 0.4 }}>·</span>
+            <span>USDC</span>
+          </div>
         </div>
       </div>
     </footer>
