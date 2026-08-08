@@ -39,10 +39,13 @@ export async function fetchShopDirectory() {
     addresses.map(async (raw) => {
       try {
         const address = ethers.getAddress(raw)
-        const shop = await cafe.shops(address)
+        const [shop, active] = await Promise.all([
+          cafe.shops(address),
+          cafe.isShopActive(address).catch(() => true),
+        ])
         const exists = shop.exists ?? shop[2]
         const name = shop.shopName ?? shop[0]
-        if (!exists || !name) return null
+        if (!exists || !name || !active) return null
         return { address, name }
       } catch {
         return null

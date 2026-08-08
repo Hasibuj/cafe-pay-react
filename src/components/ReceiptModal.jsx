@@ -39,6 +39,12 @@ function ReceiptModal({ receipt }) {
             <span style={{ color: 'var(--text-secondary)' }}>Item</span>
             <span className="font-semibold text-right" style={{ color: 'var(--text-primary)' }}>{receipt.itemName}</span>
           </div>
+          {receipt.tableNumber ? (
+            <div className="flex justify-between gap-3 text-xs">
+              <span style={{ color: 'var(--text-secondary)' }}>Table</span>
+              <span className="font-semibold text-right" style={{ color: 'var(--text-primary)' }}>#{receipt.tableNumber}</span>
+            </div>
+          ) : null}
           <div className="flex justify-between gap-3 text-xs">
             <span style={{ color: 'var(--text-secondary)' }}>Total paid</span>
             <span className="font-bold tabular-nums" style={{ color: 'var(--color-brand-400)' }}>

@@ -90,7 +90,7 @@ function StorePage({ shopOwnerAddress, onBackToDirectory }) {
     return () => { cancelled = true }
   }, [cleanOwner])
 
-  const handleBuy = useCallback(async (shopOwner, itemIndex, finalAmount) => {
+  const handleBuy = useCallback(async (shopOwner, itemIndex, finalAmount, tableNumber = 0) => {
     if (!userAddress) {
       alert('Please connect your wallet to pay with USDC.')
       return
@@ -110,6 +110,8 @@ function StorePage({ shopOwnerAddress, onBackToDirectory }) {
       const menu = menuData || await cafe.getShopMenu(shopOwner)
       const itemObj = menu.find((i) => Number(i.id) === Number(itemIndex))
       const itemName = getItemNameOverride(shopOwner, itemIndex) || itemObj?.name || 'Item'
+      const isFamous = Boolean(itemObj?.isFamous)
+      const table = isFamous ? tableNumber : 0
 
       const onChainPrice = itemObj?.price != null
         ? BigInt(itemObj.price.toString())
@@ -133,7 +135,7 @@ function StorePage({ shopOwnerAddress, onBackToDirectory }) {
         address: CONTRACT_ADDRESS,
         abi: ABI_CAFEPAY,
         functionName: 'buyItem',
-        args: [shopOwner, BigInt(itemIndex)],
+        args: [shopOwner, BigInt(itemIndex), BigInt(table)],
         chainId: arcTestnet.id,
       })
 
@@ -145,6 +147,7 @@ function StorePage({ shopOwnerAddress, onBackToDirectory }) {
         itemName,
         finalAmount: paidUsdc,
         txHash: buyHash,
+        tableNumber: table,
       })
     } catch (err) {
       alert('Transaction failed: ' + (err.shortMessage || err.reason || err.message))

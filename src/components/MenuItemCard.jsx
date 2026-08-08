@@ -1,6 +1,6 @@
 import { memo, useState, useCallback, useEffect } from 'react'
 import { ethers } from 'ethers'
-import { Minus, Plus, ShoppingCart, ImageOff } from 'lucide-react'
+import { Minus, Plus, ShoppingCart, ImageOff, Crown } from 'lucide-react'
 import {
   getItemNameOverride,
   getItemPriceOverride,
@@ -21,9 +21,11 @@ function MenuItemCard({ item, shopOwnerAddress, onBuy }) {
   const itemDesc = getItemDesc(shopOwnerAddress, item.id)
   const foodImgUrl = getItemImage(shopOwnerAddress, item.id)
   const isPizza = itemName.toLowerCase().includes('pizza')
+  const isFamous = Boolean(item.isFamous)
 
   const [selectedSize, setSelectedSize] = useState('regular')
   const [quantity, setQuantity] = useState(1)
+  const [tableNumber, setTableNumber] = useState('')
   const [imgFailed, setImgFailed] = useState(false)
 
   useEffect(() => {
@@ -44,6 +46,12 @@ function MenuItemCard({ item, shopOwnerAddress, onBuy }) {
 
   const totalPrice = getUnitPrice() * quantity
 
+  const canPay = !isFamous || (Number(tableNumber) > 0 && Number.isInteger(Number(tableNumber)))
+
+  const handlePay = () => {
+    onBuy(shopOwnerAddress, item.id, totalPrice, isFamous ? Number(tableNumber) : 0)
+  }
+
   return (
     <article className="cp-card cp-menu-card">
       <div className="cp-menu-media">
@@ -60,6 +68,11 @@ function MenuItemCard({ item, shopOwnerAddress, onBuy }) {
             <ImageOff size={26} strokeWidth={1.5} />
             <span>No photo</span>
           </div>
+        )}
+        {isFamous && (
+          <span className="cp-famous-badge" title="Famous item — served to your table">
+            <Crown size={12} /> Famous
+          </span>
         )}
       </div>
 
@@ -84,6 +97,25 @@ function MenuItemCard({ item, shopOwnerAddress, onBuy }) {
               <option value="medium">Medium (+2 USDC)</option>
               <option value="large">Large (+5 USDC)</option>
             </select>
+          </div>
+        )}
+
+        {isFamous && (
+          <div className="cp-menu-field">
+            <label className="cp-menu-label" htmlFor={`table-${item.id}`}>
+              Table number
+            </label>
+            <input
+              id={`table-${item.id}`}
+              type="number"
+              min="1"
+              step="1"
+              inputMode="numeric"
+              value={tableNumber}
+              onChange={(e) => setTableNumber(e.target.value)}
+              placeholder="e.g. 12"
+              className="cp-input cp-menu-select"
+            />
           </div>
         )}
 
@@ -118,7 +150,8 @@ function MenuItemCard({ item, shopOwnerAddress, onBuy }) {
           </div>
           <button
             type="button"
-            onClick={() => onBuy(shopOwnerAddress, item.id, totalPrice)}
+            onClick={handlePay}
+            disabled={!canPay}
             className="cp-btn cp-btn-primary cp-menu-pay"
           >
             <ShoppingCart size={15} />
