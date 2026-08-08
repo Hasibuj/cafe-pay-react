@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { Zap, ShieldCheck, CheckCircle2, ArrowRight } from 'lucide-react'
+import { Zap, ShieldCheck, Circle, ArrowRight, Play } from 'lucide-react'
 
 function scrollToShops() {
   const el = document.querySelector('.cp-directory')
@@ -15,14 +15,17 @@ function HeroBanner() {
           <span aria-hidden>✦</span>
         </span>
 
-        <h2 className="cp-hero-title text-balance" style={{ color: 'var(--text-primary)' }}>
-          Order from local cafés.
-          <span className="block" style={{ color: 'var(--color-brand-400)' }}>
-            Pay in USDC.
-          </span>
+        <h2 className="cp-hero-title">
+          <span>Order from</span>
+          <span className="cp-hero-title-line">local cafés.</span>
+          <span className="cp-hero-title-line cp-hero-title-accent">Pay in USDC.</span>
         </h2>
 
-        <p className="cp-hero-desc">Discover local cafés, order instantly, and pay securely on-chain.</p>
+        <p className="cp-hero-desc">
+          Discover local cafés, order instantly,
+          <br />
+          and pay securely on-chain.
+        </p>
 
         <ul className="cp-hero-features" aria-label="Benefits">
           <li className="cp-hero-feature">
@@ -38,7 +41,13 @@ function HeroBanner() {
             Secure payment
           </li>
           <li className="cp-hero-feature">
-            <CheckCircle2 size={14} style={{ color: 'var(--color-brand-400)' }} aria-hidden />
+            <Circle
+              size={13}
+              fill="currentColor"
+              strokeWidth={0}
+              style={{ color: 'var(--color-brand-400)' }}
+              aria-hidden
+            />
             On-chain receipt
           </li>
         </ul>
@@ -48,17 +57,17 @@ function HeroBanner() {
             Explore cafés
             <ArrowRight size={15} aria-hidden />
           </button>
-          <button type="button" onClick={scrollToShops} className="cp-btn cp-btn-ghost cp-hero-cta">
+          <button type="button" onClick={scrollToShops} className="cp-btn cp-btn-hero-secondary cp-hero-cta">
+            <Play size={13} fill="currentColor" aria-hidden />
             How it works
-            <ArrowRight size={15} aria-hidden />
           </button>
         </div>
       </div>
 
       <div className="cp-hero-media">
         <img
-          src="https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=1280&q=80"
-          alt="A barista pouring a warm coffee on a dark wooden café table in cinematic light"
+          src="https://images.unsplash.com/photo-1541167760496-1628856ab772?auto=format&fit=crop&w=1200&q=80"
+          alt="Cinematic latte art coffee cup on a dark wooden café table with beans and warm lighting"
           loading="lazy"
           decoding="async"
         />
