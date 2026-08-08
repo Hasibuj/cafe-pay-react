@@ -11,7 +11,7 @@ import {
 } from '../utils/storage'
 import { useMetaVersion } from '../hooks/useShopMeta'
 
-function MenuItemCard({ item, shopOwnerAddress, onBuy }) {
+function MenuItemCard({ item, shopOwnerAddress, onAdd }) {
   useMetaVersion()
   const itemName = getItemNameOverride(shopOwnerAddress, item.id) || item.name
   const overridePrice = getItemPriceOverride(shopOwnerAddress, item.id)
@@ -25,7 +25,6 @@ function MenuItemCard({ item, shopOwnerAddress, onBuy }) {
 
   const [selectedSize, setSelectedSize] = useState('regular')
   const [quantity, setQuantity] = useState(1)
-  const [tableNumber, setTableNumber] = useState('')
   const [imgFailed, setImgFailed] = useState(false)
 
   useEffect(() => {
@@ -46,10 +45,16 @@ function MenuItemCard({ item, shopOwnerAddress, onBuy }) {
 
   const totalPrice = getUnitPrice() * quantity
 
-  const canPay = !isFamous || (Number(tableNumber) > 0 && Number.isInteger(Number(tableNumber)))
-
-  const handlePay = () => {
-    onBuy(shopOwnerAddress, item.id, totalPrice, isFamous ? Number(tableNumber) : 0)
+  const handleAdd = () => {
+    onAdd({
+      itemId: String(item.id),
+      name: itemName,
+      isFamous,
+      size: selectedSize,
+      qty: quantity,
+      unitPrice: getUnitPrice(),
+    })
+    setQuantity(1)
   }
 
   return (
@@ -100,25 +105,6 @@ function MenuItemCard({ item, shopOwnerAddress, onBuy }) {
           </div>
         )}
 
-        {isFamous && (
-          <div className="cp-menu-field">
-            <label className="cp-menu-label" htmlFor={`table-${item.id}`}>
-              Table number
-            </label>
-            <input
-              id={`table-${item.id}`}
-              type="number"
-              min="1"
-              step="1"
-              inputMode="numeric"
-              value={tableNumber}
-              onChange={(e) => setTableNumber(e.target.value)}
-              placeholder="e.g. 12"
-              className="cp-input cp-menu-select"
-            />
-          </div>
-        )}
-
         <div className="cp-menu-row">
           <span className="cp-menu-label">Qty</span>
           <div className="cp-qty" role="group" aria-label="Quantity">
@@ -150,12 +136,12 @@ function MenuItemCard({ item, shopOwnerAddress, onBuy }) {
           </div>
           <button
             type="button"
-            onClick={handlePay}
-            disabled={!canPay}
+            onClick={handleAdd}
+            aria-label={`Add ${itemName} to order`}
             className="cp-btn cp-btn-primary cp-menu-pay"
           >
             <ShoppingCart size={15} />
-            Pay USDC
+            Add to order
           </button>
         </div>
       </div>

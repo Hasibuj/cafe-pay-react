@@ -19,6 +19,9 @@ import { CONTRACT_ADDRESS, ABI_CAFEPAY, arcTestnet } from '../config/wagmi'
 import { useShopMeta } from '../hooks/useShopMeta'
 import { useToast } from '../context/ToastContext'
 import ImageUploadField from './ImageUploadField'
+import OwnerOrdersPanel from './OwnerOrdersPanel'
+import OwnerNotificationsPanel from './OwnerNotificationsPanel'
+import { useNewOrderSignal } from '../hooks/useOrders'
 
 function StatusPill({ ok, label, okLabel }) {
   return (
@@ -60,9 +63,24 @@ function OwnerModal({ isOpen, onClose }) {
   const [qrUrl, setQrUrl] = useState('')
   const [logoPreview, setLogoPreview] = useState(null)
   const [itemPhotoBusyId, setItemPhotoBusyId] = useState(null)
+  const [viewOrderId, setViewOrderId] = useState(null)
 
   const cleanAddr = address ? ethers.getAddress(address) : null
   const { meta, reload: reloadMeta } = useShopMeta(isOpen ? cleanAddr : null)
+
+  const newOrderSignal = useNewOrderSignal(isOpen ? cleanAddr : null, isOpen && !!cleanAddr)
+
+  // Instant new-order notification for the owner (toast + auto-open order)
+  useEffect(() => {
+    if (!newOrderSignal?.order?.id) return
+    const o = newOrderSignal.order
+    const table = o.tableNumber ? `Table ${String(o.tableNumber).padStart(2, '0')} · ` : ''
+    toast.success(
+      'NEW ORDER RECEIVED',
+      `${o.id} · ${table}${(o.items || []).map((l) => `${l.qty} × ${l.name}`).join(', ')} · ${o.totalUsd} USDC`,
+    )
+    setViewOrderId(o.id)
+  }, [newOrderSignal, toast])
 
   const { data: shopData, refetch: refetchShop } = useReadContract({
     address: CONTRACT_ADDRESS,
@@ -440,6 +458,19 @@ function OwnerModal({ isOpen, onClose }) {
           </div>
         ) : (
           <div className="cp-owner-stack animate-fade-in">
+            {/* Orders + Notifications */}
+            <OwnerOrdersPanel
+              ownerAddress={cleanAddr}
+              enabled={isOpen && !!cleanAddr}
+              expandedId={viewOrderId}
+              onExpandedChange={setViewOrderId}
+            />
+            <OwnerNotificationsPanel
+              ownerAddress={cleanAddr}
+              enabled={isOpen && !!cleanAddr}
+              onViewOrder={setViewOrderId}
+            />
+
             {/* Subscription */}
             <section className="cp-owner-section">
               <div className="cp-owner-section-head">

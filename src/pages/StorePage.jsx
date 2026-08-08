@@ -1,18 +1,23 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useAccount, useWriteContract, useSwitchChain } from 'wagmi'
 import { ethers } from 'ethers'
-import { ArrowLeft, Coffee, CreditCard, ImageOff } from 'lucide-react'
+import {
+  ArrowLeft, Coffee, CreditCard, ImageOff, ShoppingCart,
+  Loader2, Table2, CheckCircle2, XCircle,
+} from 'lucide-react'
 import MenuItemCard from '../components/MenuItemCard'
 import ReceiptModal from '../components/ReceiptModal'
+import OrderTracker from '../components/OrderTracker'
 import {
-  getShopLogo, getShopTagline, isItemDeleted, isItemAvailable,
-  getItemNameOverride, fetchShopMeta,
+  getShopLogo, getShopTagline, isItemDeleted, isItemAvailable, fetchShopMeta,
 } from '../utils/storage'
 import {
   CONTRACT_ADDRESS, USDC_ADDRESS, ABI_CAFEPAY, ABI_ERC20, arcTestnet,
 } from '../config/wagmi'
 import { getCafePayContract, getUsdcContract } from '../utils/rpc'
 import { useMetaVersion } from '../hooks/useShopMeta'
+import { useOrderTracker } from '../hooks/useOrders'
+import { createOrder, updateOrderPayment } from '../utils/orders'
 
 function StorePage({ shopOwnerAddress, onBackToDirectory }) {
   const { address: userAddress, chainId } = useAccount()
@@ -26,7 +31,15 @@ function StorePage({ shopOwnerAddress, onBackToDirectory }) {
   const [loading, setLoading] = useState(true)
   const [receipt, setReceipt] = useState(null)
   const [logoFailed, setLogoFailed] = useState(false)
+
+  const [cart, setCart] = useState([])
+  const [tableNumber, setTableNumber] = useState('')
+  const [placing, setPlacing] = useState(false)
+  const [placeError, setPlaceError] = useState(null)
+  const [activeOrderId, setActiveOrderId] = useState(null)
+
   useMetaVersion()
+  const { order: activeOrder } = useOrderTracker(activeOrderId, userAddress)
 
   let cleanOwner = null
   try {
@@ -34,6 +47,12 @@ function StorePage({ shopOwnerAddress, onBackToDirectory }) {
   } catch {
     cleanOwner = null
   }
+
+  // Read optional ?table=NN (e.g. from a table QR code)
+  useEffect(() => {
+    const table = new URLSearchParams(window.location.search).get('table')
+    if (table && /^\d{1,3}$/.test(table)) setTableNumber(table)
+  }, [])
 
   useEffect(() => {
     if (!cleanOwner) {
@@ -90,9 +109,36 @@ function StorePage({ shopOwnerAddress, onBackToDirectory }) {
     return () => { cancelled = true }
   }, [cleanOwner])
 
-  const handleBuy = useCallback(async (shopOwner, itemIndex, finalAmount, tableNumber = 0) => {
+  const handleAdd = useCallback((line) => {
+    const key = `${line.itemId}:${line.size || 'regular'}`
+    setCart((prev) => {
+      const idx = prev.findIndex((l) => l.key === key)
+      if (idx === -1) return [...prev, { ...line, key }]
+      const next = [...prev]
+      next[idx] = { ...next[idx], qty: next[idx].qty + line.qty }
+      return next
+    })
+  }, [])
+
+  const cartTotal = useMemo(() => cart.reduce((s, l) => s + l.unitPrice * l.qty, 0), [cart])
+  const cartCount = useMemo(() => cart.reduce((s, l) => s + l.qty, 0), [cart])
+  const hasFamous = useMemo(() => cart.some((l) => l.isFamous), [cart])
+  const tableNum = Number(tableNumber)
+  const tableOk = tableNum > 0 && Number.isInteger(tableNum)
+
+  const handlePlaceOrder = useCallback(async () => {
+    setPlaceError(null)
     if (!userAddress) {
-      alert('Please connect your wallet to pay with USDC.')
+      setPlaceError('Please connect your wallet to pay with USDC.')
+      return
+    }
+    if (cart.length === 0) return
+    if (!tableOk) {
+      setPlaceError('Please enter your table number.')
+      return
+    }
+    if (hasFamous && !tableOk) {
+      setPlaceError('A table number is required for famous items.')
       return
     }
 
@@ -101,58 +147,108 @@ function StorePage({ shopOwnerAddress, onBackToDirectory }) {
         try {
           await switchChainAsync({ chainId: arcTestnet.id })
         } catch {
-          alert('Please switch your wallet to Arc Testnet.')
+          setPlaceError('Please switch your wallet to Arc Testnet.')
           return
         }
       }
 
+      const items = cart.map((l) => ({
+        itemId: l.itemId,
+        name: l.name,
+        size: l.size && l.size !== 'regular' ? l.size : null,
+        qty: l.qty,
+        unitPrice: Number(l.unitPrice),
+        isFamous: Boolean(l.isFamous),
+      }))
+
+      setPlacing(true)
+
+      // 1. Create the order (payment starts Pending)
+      const created = await createOrder({
+        shopOwner: cleanOwner,
+        buyer: userAddress,
+        tableNumber: tableNum,
+        items,
+        totalUsd: Number(cartTotal.toFixed(2)),
+        paymentMethod: 'USDC',
+        paymentStatus: 'Pending',
+      })
+      const order = created.order
+      setActiveOrderId(order.id)
+      setCart([])
+
+      // 2. Approve USDC + settle on-chain for every unit ordered
       const cafe = getCafePayContract()
-      const menu = menuData || await cafe.getShopMenu(shopOwner)
-      const itemObj = menu.find((i) => Number(i.id) === Number(itemIndex))
-      const itemName = getItemNameOverride(shopOwner, itemIndex) || itemObj?.name || 'Item'
-      const isFamous = Boolean(itemObj?.isFamous)
-      const table = isFamous ? tableNumber : 0
-
-      const onChainPrice = itemObj?.price != null
-        ? BigInt(itemObj.price.toString())
-        : ethers.parseUnits(finalAmount.toString(), 6)
-
+      const menu = menuData || await cafe.getShopMenu(cleanOwner)
       const usdc = getUsdcContract()
-      const allowance = await usdc.allowance(userAddress, CONTRACT_ADDRESS)
 
-      if (allowance < onChainPrice) {
+      // On-chain charge is the item's on-chain price per unit
+      let chargeTotal = 0n
+      const linesOnChain = cart.map((l) => {
+        const itemObj = menu.find((i) => Number(i.id) === Number(l.itemId))
+        const unit = itemObj?.price != null
+          ? BigInt(itemObj.price.toString())
+          : ethers.parseUnits(l.unitPrice.toFixed(6), 6)
+        chargeTotal += unit * BigInt(l.qty)
+        return { itemId: l.itemId, qty: l.qty, unit }
+      })
+
+      const allowance = await usdc.allowance(userAddress, CONTRACT_ADDRESS)
+      if (allowance < chargeTotal) {
         await writeContractAsync({
           address: USDC_ADDRESS,
           abi: ABI_ERC20,
           functionName: 'approve',
-          args: [CONTRACT_ADDRESS, onChainPrice],
+          args: [CONTRACT_ADDRESS, chargeTotal],
           chainId: arcTestnet.id,
         })
         await new Promise((resolve) => setTimeout(resolve, 2500))
       }
 
-      const buyHash = await writeContractAsync({
-        address: CONTRACT_ADDRESS,
-        abi: ABI_CAFEPAY,
-        functionName: 'buyItem',
-        args: [shopOwner, BigInt(itemIndex), BigInt(table)],
-        chainId: arcTestnet.id,
-      })
+      let lastHash = null
+      for (const line of linesOnChain) {
+        for (let i = 0; i < line.qty; i++) {
+          lastHash = await writeContractAsync({
+            address: CONTRACT_ADDRESS,
+            abi: ABI_CAFEPAY,
+            functionName: 'buyItem',
+            args: [cleanOwner, BigInt(line.itemId), BigInt(tableNum)],
+            chainId: arcTestnet.id,
+          })
+        }
+      }
 
-      const shop = await cafe.shops(shopOwner)
-      const paidUsdc = Number(ethers.formatUnits(onChainPrice, 6))
+      // 3. Mark payment Successful only after the on-chain txs settle
+      await updateOrderPayment(order.id, 'Successful', lastHash)
 
+      const shop = await cafe.shops(cleanOwner)
       setReceipt({
         shopName: shop.shopName || shop[0] || 'CafePay Shop',
-        itemName,
-        finalAmount: paidUsdc,
-        txHash: buyHash,
-        tableNumber: table,
+        itemName: items.length === 1 ? items[0].name : `${items.length} items`,
+        finalAmount: cartTotal,
+        txHash: lastHash,
+        tableNumber: tableNum,
       })
+      setPlaceError(null)
     } catch (err) {
-      alert('Transaction failed: ' + (err.shortMessage || err.reason || err.message))
+      console.error('Place order failed:', err)
+      setPlaceError('Transaction failed: ' + (err.shortMessage || err.reason || err.message))
+      // Keep the order visible but mark payment failed
+      if (activeOrderId && userAddress) {
+        try {
+          await updateOrderPayment(activeOrderId, 'Failed')
+        } catch {
+          /* ignore */
+        }
+      }
+    } finally {
+      setPlacing(false)
     }
-  }, [userAddress, chainId, menuData, writeContractAsync, switchChainAsync])
+  }, [
+    userAddress, chainId, cart, cartTotal, cleanOwner, menuData,
+    writeContractAsync, switchChainAsync, tableOk, hasFamous, tableNum,
+    activeOrderId,
+  ])
 
   const logoUrl = cleanOwner ? getShopLogo(cleanOwner) : null
 
@@ -203,6 +299,8 @@ function StorePage({ shopOwnerAddress, onBackToDirectory }) {
         </div>
       </div>
 
+      {activeOrder && <OrderTracker order={activeOrder} />}
+
       <div className="cp-store-menu-section">
         <div className="cp-store-menu-head">
           <h3 className="cp-h3" style={{ color: 'var(--text-primary)' }}>
@@ -236,12 +334,72 @@ function StorePage({ shopOwnerAddress, onBackToDirectory }) {
                 key={String(item.id)}
                 item={item}
                 shopOwnerAddress={cleanOwner}
-                onBuy={handleBuy}
+                onAdd={handleAdd}
               />
             ))
           )}
         </div>
       </div>
+
+      {cart.length > 0 && !placing && (
+        <div className="cp-cart-bar">
+          <div className="cp-container cp-cart-bar-inner">
+            <div className="cp-cart-bar-title">
+              <ShoppingCart size={16} style={{ color: 'var(--color-brand-400)' }} />
+              <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                {cartCount} item{cartCount === 1 ? '' : 's'}
+              </span>
+              <span className="text-sm font-bold tabular-nums" style={{ color: 'var(--color-brand-400)' }}>
+                {cartTotal.toFixed(2)} USDC
+              </span>
+            </div>
+
+            <div className="cp-cart-actions">
+              <label className="cp-cart-table">
+                <Table2 size={14} style={{ color: 'var(--text-secondary)' }} />
+                <span className="sr-only">Table number</span>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  inputMode="numeric"
+                  value={tableNumber}
+                  onChange={(e) => setTableNumber(e.target.value)}
+                  placeholder="Table #"
+                  className="cp-cart-table-input"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={handlePlaceOrder}
+                disabled={placing}
+                className="cp-btn cp-btn-primary cp-cart-checkout"
+              >
+                {placing ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                {placing ? 'Placing…' : `Place order · ${cartTotal.toFixed(2)}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {placing && (
+        <div className="cp-cart-bar is-placing" role="status">
+          <div className="cp-container cp-cart-bar-inner justify-center">
+            <Loader2 size={15} className="animate-spin" style={{ color: 'var(--color-brand-400)' }} />
+            <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+              Ordering on-chain… you'll be notified when the restaurant confirms.
+            </span>
+          </div>
+        </div>
+      )}
+
+      {placeError && (
+        <div className="cp-container cp-place-error" role="alert">
+          <XCircle size={15} />
+          {placeError}
+        </div>
+      )}
 
       <ReceiptModal receipt={receipt} />
     </section>

@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { WebSocketServer } from 'ws'
 import { uploadImageToR2 } from './api/lib/r2Upload.js'
 import {
   getShopBundle,
@@ -9,6 +10,8 @@ import {
   upsertItemsMeta,
   isTursoConfigured,
 } from './api/lib/turso.js'
+import { handleOrders, handleNotifications } from './api/lib/ordersHttp.js'
+import { createRealtimeHub } from './api/lib/realtimeHub.js'
 
 function applyEnv(env) {
   for (const [key, value] of Object.entries(env)) {
@@ -34,20 +37,72 @@ async function readBody(req) {
 }
 
 /**
- * Local Vite middleware for /api/upload and /api/shop-meta (loads .env).
+ * Local Vite middleware for /api/upload, /api/shop-meta, /api/orders (loads .env)
+ * plus a WebSocket /realtime channel for live order updates.
  */
 function localApis(env) {
   applyEnv(env)
 
+  const hub = createRealtimeHub()
+  let wss = null
+
+  function ensureWss(server) {
+    if (wss) return wss
+    wss = new WebSocketServer({ noServer: true })
+    server.httpServer.on('upgrade', (req, socket, head) => {
+      let pathname = ''
+      try {
+        pathname = new URL(req.url || '', 'http://localhost').pathname
+      } catch {
+        pathname = req.url || ''
+      }
+      if (pathname !== '/realtime') return
+      wss.handleUpgrade(req, socket, head, (ws) => {
+        wss.emit('connection', ws, req)
+      })
+    })
+    wss.on('connection', (ws) => {
+      const unsubscribe = hub.addSocket(ws)
+      ws.on('message', (raw) => {
+        try {
+          const msg = JSON.parse(raw.toString())
+          if (msg?.channel) hub.subscribe(ws, String(msg.channel))
+        } catch {
+          /* ignore malformed */
+        }
+      })
+      ws.on('close', unsubscribe)
+      ws.on('error', unsubscribe)
+    })
+    return wss
+  }
+
+  function publish(event) {
+    hub.publish(event)
+  }
+
   return {
     name: 'local-cafe-apis',
     configureServer(server) {
+      ensureWss(server)
+
       server.middlewares.use(async (req, res, next) => {
         const path = req.url?.split('?')[0]
+
+        // Live orders — own path handling (create / update / query)
+        if (path === '/api/orders') {
+          return handleOrders(req, res, publish)
+        }
+
+        // Live notifications — query + mark read
+        if (path === '/api/notifications') {
+          return handleNotifications(req, res, publish)
+        }
+
         if (path !== '/api/upload' && path !== '/api/shop-meta') return next()
 
         res.setHeader('Access-Control-Allow-Origin', '*')
-        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS')
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
 
         if (req.method === 'OPTIONS') {
