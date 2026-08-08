@@ -702,35 +702,54 @@ textarea {
 .cp-hero {
   position: relative;
   overflow: hidden;
-  border-radius: clamp(1.125rem, 2vw, 1.5rem);
+  border-radius: clamp(1.25rem, 2vw, 1.5rem);
   border: 1px solid oklch(0.34 0.02 45 / 0.6);
   background:
-    radial-gradient(120% 90% at 8% 0%, oklch(0.22 0.03 42 / 0.55) 0%, transparent 55%),
-    linear-gradient(140deg, oklch(0.2 0.028 40) 0%, oklch(0.15 0.022 38) 100%);
+    radial-gradient(120% 100% at 0% 0%, oklch(0.22 0.03 42 / 0.6) 0%, transparent 55%),
+    linear-gradient(140deg, oklch(0.2 0.028 40) 0%, oklch(0.14 0.022 38) 100%);
   box-shadow: var(--shadow-card);
-  padding: clamp(1.5rem, 4vw, 2.75rem);
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: clamp(1.25rem, 3vw, 2rem);
-  align-items: center;
+  isolation: isolate;
 }
 
-@media (min-width: 900px) {
-  .cp-hero {
-    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
-    gap: 0;
-    padding: clamp(2rem, 4.5vw, 2.75rem);
-  }
+/* Mobile default: single column, image as a framed block below content */
+.cp-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 1.25rem;
 }
 
-.cp-hero::after {
+.cp-hero-media {
+  position: relative;
+  z-index: 0;
+  order: 5;
+  width: 100%;
+  border-radius: clamp(1rem, 2.5vw, 1.125rem);
+  overflow: hidden;
+  aspect-ratio: 3 / 2;
+  max-height: 15rem;
+  background: var(--bg-input);
+  box-shadow: var(--shadow-card);
+}
+
+.cp-hero-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Soft dark gradient so the photo melts into the dark theme */
+.cp-hero-media::after {
   content: "";
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background:
-    radial-gradient(ellipse 45% 70% at 90% 10%, oklch(0.6 0.1 55 / 0.1), transparent 62%),
-    linear-gradient(to bottom, transparent 60%, oklch(0.08 0.02 38 / 0.22));
+  background: linear-gradient(
+    to bottom,
+    oklch(0.1 0.02 40 / 0.05) 0%,
+    oklch(0.1 0.02 40 / 0.3) 100%
+  );
 }
 
 .cp-hero-content {
@@ -740,7 +759,6 @@ textarea {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  padding: clamp(0.5rem, 1.5vw, 1rem);
 }
 
 .cp-hero-badge {
@@ -756,7 +774,7 @@ textarea {
   border: 1px solid oklch(0.58 0.11 48 / 0.4);
   background: oklch(0.18 0.02 40 / 0.7);
   color: var(--color-brand-300);
-  margin-bottom: clamp(1rem, 2vw, 1.25rem);
+  margin-bottom: clamp(0.9rem, 2vw, 1.25rem);
 }
 
 .cp-hero-badge span {
@@ -784,14 +802,8 @@ textarea {
   color: var(--color-brand-400) !important;
 }
 
-@media (min-width: 900px) {
-  .cp-hero-title {
-    font-size: clamp(3rem, 2.2rem + 3vw, 4.25rem);
-  }
-}
-
 .cp-hero-desc {
-  max-width: 30ch;
+  max-width: 32ch;
   margin: clamp(1rem, 2.2vw, 1.4rem) 0 0;
   font-size: clamp(0.875rem, 0.85rem + 0.3vw, 1rem);
   line-height: 1.6;
@@ -799,7 +811,7 @@ textarea {
   text-wrap: pretty;
 }
 
-.cp-hero-features {
+.cp-hero-benefits {
   list-style: none;
   margin: clamp(1.1rem, 2.5vw, 1.5rem) 0 0;
   padding: 0;
@@ -809,7 +821,7 @@ textarea {
   gap: 0.6rem 1.4rem;
 }
 
-.cp-hero-feature {
+.cp-hero-benefit {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
@@ -865,51 +877,143 @@ textarea {
   color: #fff;
 }
 
-.cp-hero-media {
-  position: relative;
-  z-index: 1;
-  min-width: 0;
-  border-radius: clamp(1rem, 2vw, 1.35rem);
-  border: 1px solid oklch(0.34 0.02 45 / 0.55);
-  box-shadow: var(--shadow-card);
-  overflow: hidden;
-  aspect-ratio: 5 / 4;
-  max-height: 34rem;
-  background: var(--bg-input);
+/* Floating feature panel — desktop only (mobile uses 2×2 cards) */
+.cp-hero-panel {
+  display: none;
 }
 
-@media (min-width: 900px) {
-  .cp-hero-media {
-    aspect-ratio: 4 / 3.6;
-    border-radius: clamp(1.125rem, 2vw, 1.5rem);
-  }
-}
-
-.cp-hero-media img {
+/* ─── Mobile: four feature cards (2×2) ─── */
+.cp-hero-feature-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
   width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-  transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  margin-top: clamp(1.1rem, 2.5vw, 1.5rem);
 }
 
-.cp-hero:hover .cp-hero-media img {
-  transform: scale(1.03);
+.cp-hero-feature-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.9rem 0.5rem;
+  border-radius: 1rem;
+  border: 1px solid oklch(0.34 0.02 45 / 0.6);
+  background: oklch(0.17 0.02 40 / 0.65);
+  color: var(--color-brand-300);
+  text-align: center;
+  min-height: 5.5rem;
 }
 
-/* Soft dark gradient so the photo blends into the hero (left edge melts into content) */
-.cp-hero-media::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(
-    260deg,
-    oklch(0.16 0.022 40 / 0.7) 0%,
-    oklch(0.16 0.022 40 / 0.18) 32%,
-    transparent 55%,
-    oklch(0.08 0.02 38 / 0.35) 100%
-  );
+.cp-hero-panel-label {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.25;
+  color: var(--text-secondary);
+}
+
+.cp-hero-panel-label span {
+  white-space: nowrap;
+}
+
+/* ─── Desktop hero: image bleeds full-height right half + floating panel ─── */
+@media (min-width: 900px) {
+  .cp-hero {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    padding: clamp(2.75rem, 4vw, 3.25rem);
+    min-height: clamp(30rem, 34vw, 33rem);
+  }
+
+  /* Coffee image covers the entire right ~58% of the hero, edge to edge */
+  .cp-hero-media {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 42%;
+    width: auto;
+    height: auto;
+    order: 0;
+    aspect-ratio: auto;
+    max-height: none;
+    border-radius: 0;
+    border-left: 1px solid oklch(0.34 0.02 45 / 0.5);
+  }
+
+  .cp-hero-media img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* Strong smooth left-to-right gradient so text blends into the photo */
+  .cp-hero-media::after {
+    background: linear-gradient(
+      to right,
+      oklch(0.16 0.024 40 / 0.85) 0%,
+      oklch(0.16 0.024 40 / 0.35) 28%,
+      transparent 55%,
+      oklch(0.08 0.02 38 / 0.3) 100%
+    );
+  }
+
+  .cp-hero-content {
+    position: relative;
+    z-index: 2;
+    max-width: 46%;
+    width: 46%;
+    min-height: 0;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .cp-hero-title {
+    font-size: clamp(3.25rem, 2.6rem + 1.8vw, 4.1rem);
+  }
+
+  /* Floating feature panel over lower-right of the image — REQUIRED element */
+  .cp-hero-panel {
+    position: absolute;
+    z-index: 3;
+    right: clamp(1.25rem, 2vw, 2rem);
+    bottom: clamp(1.25rem, 2vw, 2rem);
+    left: auto;
+    width: 56%;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    border-radius: clamp(1rem, 1.5vw, 1.25rem);
+    border: 1px solid oklch(0.5 0.03 45 / 0.35);
+    background: color-mix(in oklch, oklch(0.13 0.02 38) 72%, transparent);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow: var(--shadow-float);
+  }
+
+  .cp-hero-panel-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 1.1rem 0.5rem;
+    text-align: center;
+    color: var(--color-brand-300);
+  }
+
+  .cp-hero-panel-item + .cp-hero-panel-item {
+    border-left: 1px solid oklch(0.5 0.03 45 / 0.25);
+  }
+
+  .cp-hero-feature-cards {
+    display: none;
+  }
 }
 
 /* ─── Shop cards ─── */
