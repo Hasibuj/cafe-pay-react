@@ -2,7 +2,6 @@ import { memo } from 'react'
 import {
   Zap, ShieldCheck, BookOpen, CircleDollarSign, Receipt, ArrowRight, Play,
 } from 'lucide-react'
-import heroImg from '../assets/hero.png'
 
 function scrollToShops() {
   const el = document.querySelector('.cp-directory')
@@ -40,7 +39,7 @@ function HeroBanner() {
     <section className="cp-hero animate-fade-in" aria-label="Welcome">
       <div className="cp-hero-media" aria-hidden="true">
         <img
-          src={heroImg}
+          src="https://images.pexels.com/photos/8488379/pexels-photo-8488379.jpeg?auto=compress&cs=tinysrgb&w=1600"
           alt=""
           loading="eager"
           decoding="async"
