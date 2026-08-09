@@ -9,16 +9,16 @@ const HERO_SLIDES = [
     alt: 'Latte art in a black ceramic cup on a wooden table',
   },
   {
-    src: 'https://images.pexels.com/photos/302899/pexels-photo-302899.jpeg?auto=compress&cs=tinysrgb&w=1200',
-    alt: 'Cappuccino topped with latte art',
+    src: 'https://images.pexels.com/photos/315755/pexels-photo-315755.jpeg?auto=compress&cs=tinysrgb&w=1200',
+    alt: 'Pizza topped with arugula, olives, and melted cheese',
   },
   {
-    src: 'https://images.pexels.com/photos/312418/pexels-photo-312418.jpeg?auto=compress&cs=tinysrgb&w=1200',
-    alt: 'Close-up of a coffee cup on a café table',
+    src: 'https://images.pexels.com/photos/1639557/pexels-photo-1639557.jpeg?auto=compress&cs=tinysrgb&w=1200',
+    alt: 'Cheeseburger with bacon, lettuce, and tomato on a sesame seed bun',
   },
   {
-    src: 'https://images.pexels.com/photos/1487511/pexels-photo-1487511.jpeg?auto=compress&cs=tinysrgb&w=1200',
-    alt: 'Creamy penne pasta served on a white plate',
+    src: 'https://images.pexels.com/photos/10648379/pexels-photo-10648379.jpeg?auto=compress&cs=tinysrgb&w=1200',
+    alt: 'Golden crispy fried chicken pieces',
   },
 ]
 
