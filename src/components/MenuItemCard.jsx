@@ -1,6 +1,6 @@
 import { memo, useState, useCallback, useEffect } from 'react'
 import { ethers } from 'ethers'
-import { Minus, Plus, ShoppingCart, ImageOff } from 'lucide-react'
+import { Minus, Plus, ShoppingCart, ImageOff, Crown } from 'lucide-react'
 import {
   getItemNameOverride,
   getItemPriceOverride,
@@ -11,7 +11,7 @@ import {
 } from '../utils/storage'
 import { useMetaVersion } from '../hooks/useShopMeta'
 
-function MenuItemCard({ item, shopOwnerAddress, onBuy }) {
+function MenuItemCard({ item, shopOwnerAddress, onAdd }) {
   useMetaVersion()
   const itemName = getItemNameOverride(shopOwnerAddress, item.id) || item.name
   const overridePrice = getItemPriceOverride(shopOwnerAddress, item.id)
@@ -21,6 +21,7 @@ function MenuItemCard({ item, shopOwnerAddress, onBuy }) {
   const itemDesc = getItemDesc(shopOwnerAddress, item.id)
   const foodImgUrl = getItemImage(shopOwnerAddress, item.id)
   const isPizza = itemName.toLowerCase().includes('pizza')
+  const isFamous = Boolean(item.isFamous)
 
   const [selectedSize, setSelectedSize] = useState('regular')
   const [quantity, setQuantity] = useState(1)
@@ -44,6 +45,18 @@ function MenuItemCard({ item, shopOwnerAddress, onBuy }) {
 
   const totalPrice = getUnitPrice() * quantity
 
+  const handleAdd = () => {
+    onAdd({
+      itemId: String(item.id),
+      name: itemName,
+      isFamous,
+      size: selectedSize,
+      qty: quantity,
+      unitPrice: getUnitPrice(),
+    })
+    setQuantity(1)
+  }
+
   return (
     <article className="cp-card cp-menu-card">
       <div className="cp-menu-media">
@@ -60,6 +73,11 @@ function MenuItemCard({ item, shopOwnerAddress, onBuy }) {
             <ImageOff size={26} strokeWidth={1.5} />
             <span>No photo</span>
           </div>
+        )}
+        {isFamous && (
+          <span className="cp-famous-badge" title="Famous item — served to your table">
+            <Crown size={12} /> Famous
+          </span>
         )}
       </div>
 
@@ -118,11 +136,12 @@ function MenuItemCard({ item, shopOwnerAddress, onBuy }) {
           </div>
           <button
             type="button"
-            onClick={() => onBuy(shopOwnerAddress, item.id, totalPrice)}
+            onClick={handleAdd}
+            aria-label={`Add ${itemName} to order`}
             className="cp-btn cp-btn-primary cp-menu-pay"
           >
             <ShoppingCart size={15} />
-            Pay USDC
+            Add to order
           </button>
         </div>
       </div>

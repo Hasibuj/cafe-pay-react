@@ -4,6 +4,7 @@ import { Coffee, ChevronDown, Copy, Check, LogOut, Building2, Wallet, AlertTrian
 import { useWalletStore } from '../context/WalletStoreContext'
 import { arcTestnet } from '../config/wagmi'
 import { fetchWalletUsdcBalance } from '../utils/walletBalance'
+import NotificationBell from './NotificationBell'
 
 export default function Header({ onOpenOwnerModal }) {
   const { address, isConnected, chain, chainId } = useAccount()
@@ -130,6 +131,8 @@ export default function Header({ onOpenOwnerModal }) {
               Owner
             </button>
           )}
+
+          {isConnected && <NotificationBell address={address} />}
 
           {isConnected ? (
             <div className="relative">

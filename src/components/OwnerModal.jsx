@@ -4,7 +4,7 @@ import { ethers } from 'ethers'
 import {
   X, Store, Upload, QrCode, Tag, Plus, Pencil, Trash2, ToggleLeft, ToggleRight,
   FileImage, DollarSign, Type, AlignLeft, Loader2, AlertCircle, Save, Ban,
-  CheckCircle2, Cloud, Camera,
+  CheckCircle2, Cloud, Camera, Crown, Clock,
 } from 'lucide-react'
 import {
   getShopTagline, getShopLogo, hasSavedLogo, hasSavedItemImage,
@@ -19,6 +19,9 @@ import { CONTRACT_ADDRESS, ABI_CAFEPAY, arcTestnet } from '../config/wagmi'
 import { useShopMeta } from '../hooks/useShopMeta'
 import { useToast } from '../context/ToastContext'
 import ImageUploadField from './ImageUploadField'
+import OwnerOrdersPanel from './OwnerOrdersPanel'
+import OwnerNotificationsPanel from './OwnerNotificationsPanel'
+import { useNewOrderSignal } from '../hooks/useOrders'
 
 function StatusPill({ ok, label, okLabel }) {
   return (
@@ -41,6 +44,7 @@ function OwnerModal({ isOpen, onClose }) {
   const [itemName, setItemName] = useState('')
   const [itemPrice, setItemPrice] = useState('')
   const [itemDesc, setItemDescInput] = useState('')
+  const [itemFamous, setItemFamous] = useState(false)
   const [shopLogoFile, setShopLogoFile] = useState(null)
   const [logoCompressInfo, setLogoCompressInfo] = useState(null)
   const [logoFieldKey, setLogoFieldKey] = useState(0)
@@ -59,9 +63,24 @@ function OwnerModal({ isOpen, onClose }) {
   const [qrUrl, setQrUrl] = useState('')
   const [logoPreview, setLogoPreview] = useState(null)
   const [itemPhotoBusyId, setItemPhotoBusyId] = useState(null)
+  const [viewOrderId, setViewOrderId] = useState(null)
 
   const cleanAddr = address ? ethers.getAddress(address) : null
   const { meta, reload: reloadMeta } = useShopMeta(isOpen ? cleanAddr : null)
+
+  const newOrderSignal = useNewOrderSignal(isOpen ? cleanAddr : null, isOpen && !!cleanAddr)
+
+  // Instant new-order notification for the owner (toast + auto-open order)
+  useEffect(() => {
+    if (!newOrderSignal?.order?.id) return
+    const o = newOrderSignal.order
+    const table = o.tableNumber ? `Table ${String(o.tableNumber).padStart(2, '0')} · ` : ''
+    toast.success(
+      'NEW ORDER RECEIVED',
+      `${o.id} · ${table}${(o.items || []).map((l) => `${l.qty} × ${l.name}`).join(', ')} · ${o.totalUsd} USDC`,
+    )
+    setViewOrderId(o.id)
+  }, [newOrderSignal, toast])
 
   const { data: shopData, refetch: refetchShop } = useReadContract({
     address: CONTRACT_ADDRESS,
@@ -70,6 +89,15 @@ function OwnerModal({ isOpen, onClose }) {
     args: cleanAddr ? [cleanAddr] : undefined,
     chainId: arcTestnet.id,
     query: { enabled: !!cleanAddr && isOpen },
+  })
+
+  const { data: subData, refetch: refetchSub } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: ABI_CAFEPAY,
+    functionName: 'getSubscriptionStatus',
+    args: cleanAddr ? [cleanAddr] : undefined,
+    chainId: arcTestnet.id,
+    query: { enabled: !!cleanAddr && isOpen && isRegistered },
   })
 
   const { data: menuData, refetch: refetchMenu } = useReadContract({
@@ -150,7 +178,7 @@ function OwnerModal({ isOpen, onClose }) {
         address: CONTRACT_ADDRESS,
         abi: ABI_CAFEPAY,
         functionName: 'addItem',
-        args: [itemName.trim(), parsedPrice],
+        args: [itemName.trim(), parsedPrice, itemFamous],
         chainId: arcTestnet.id,
       })
 
@@ -190,6 +218,7 @@ function OwnerModal({ isOpen, onClose }) {
       setItemName('')
       setItemPrice('')
       setItemDescInput('')
+      setItemFamous(false)
       setItemImageFile(null)
       setItemImageFieldKey((k) => k + 1)
     } catch (err) {
@@ -198,7 +227,32 @@ function OwnerModal({ isOpen, onClose }) {
       setIsSubmitting(false)
       setBusyAction('')
     }
-  }, [itemName, itemPrice, itemDesc, itemImageFile, address, writeContractAsync, refetchMenu, reloadMeta, toast])
+  }, [itemName, itemPrice, itemDesc, itemFamous, itemImageFile, address, writeContractAsync, refetchMenu, reloadMeta, toast])
+
+  const handlePayMonthlyFee = useCallback(async () => {
+    if (!address) {
+      toast.error('Wallet required', 'Connect your wallet first.')
+      return
+    }
+    setIsSubmitting(true)
+    setBusyAction('subscription')
+    try {
+      await writeContractAsync({
+        address: CONTRACT_ADDRESS,
+        abi: ABI_CAFEPAY,
+        functionName: 'payMonthlyFee',
+        args: [],
+        chainId: arcTestnet.id,
+      })
+      toast.success('Subscription renewed', 'Your shop is active for another 30 days.')
+      refetchSub()
+    } catch (err) {
+      toast.error('Subscription payment failed', err.shortMessage || err.reason || err.message)
+    } finally {
+      setIsSubmitting(false)
+      setBusyAction('')
+    }
+  }, [address, writeContractAsync, refetchSub, toast])
 
   const handleUpdateLogo = useCallback(async () => {
     if (!address) {
@@ -404,6 +458,59 @@ function OwnerModal({ isOpen, onClose }) {
           </div>
         ) : (
           <div className="cp-owner-stack animate-fade-in">
+            {/* Orders + Notifications */}
+            <OwnerOrdersPanel
+              ownerAddress={cleanAddr}
+              enabled={isOpen && !!cleanAddr}
+              expandedId={viewOrderId}
+              onExpandedChange={setViewOrderId}
+            />
+            <OwnerNotificationsPanel
+              ownerAddress={cleanAddr}
+              enabled={isOpen && !!cleanAddr}
+              onViewOrder={setViewOrderId}
+            />
+
+            {/* Subscription */}
+            <section className="cp-owner-section">
+              <div className="cp-owner-section-head">
+                <h4>
+                  <Clock size={15} />
+                  Subscription
+                </h4>
+                <span className="text-[0.65rem]" style={{ color: 'var(--text-tertiary)' }}>
+                  5 USDC / 30 days
+                </span>
+              </div>
+              {subData ? (
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                  <div className="flex items-center gap-2 flex-1">
+                    <StatusPill ok={Boolean(subData[0] || subData.active)} label="Inactive" okLabel="Active" />
+                    <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                      {subData[0] || subData.active
+                        ? `${Math.floor(Number(subData[2] || subData.secondsRemaining) / 86400)} days remaining`
+                        : 'Subscription expired — renew to stay visible in the directory.'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handlePayMonthlyFee}
+                    disabled={isSubmitting}
+                    className="cp-btn cp-btn-primary shrink-0"
+                  >
+                    {busyAction === 'subscription'
+                      ? <Loader2 size={14} className="animate-spin" />
+                      : <Crown size={14} />}
+                    {busyAction === 'subscription' ? 'Renewing…' : 'Renew (5 USDC)'}
+                  </button>
+                </div>
+              ) : (
+                <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                  Reading subscription status…
+                </p>
+              )}
+            </section>
+
             {/* Branding */}
             <section className="cp-owner-section">
               <div className="cp-owner-section-head">
@@ -548,6 +655,23 @@ function OwnerModal({ isOpen, onClose }) {
                   className="cp-input !text-sm"
                 />
               </div>
+
+              <label className="cp-toggle-row mt-3.5">
+                <input
+                  type="checkbox"
+                  checked={itemFamous}
+                  onChange={(e) => setItemFamous(e.target.checked)}
+                />
+                <span className="cp-toggle-track" aria-hidden />
+                <span>
+                  <span className="cp-owner-label !mb-0 flex items-center gap-1">
+                    <Crown size={12} /> Famous item
+                  </span>
+                  <span className="text-[0.65rem] block" style={{ color: 'var(--text-tertiary)' }}>
+                    Customers must enter a table number so we serve it to their table.
+                  </span>
+                </span>
+              </label>
 
               <div className="mt-3.5">
                 <ImageUploadField
