@@ -1,7 +1,28 @@
-import { memo } from 'react'
+import { memo, useEffect, useState } from 'react'
 import {
   Zap, ShieldCheck, BookOpen, CircleDollarSign, Receipt, ArrowRight, Play,
 } from 'lucide-react'
+
+const HERO_SLIDES = [
+  {
+    src: 'https://images.pexels.com/photos/8488379/pexels-photo-8488379.jpeg?auto=compress&cs=tinysrgb&w=1200',
+    alt: 'Latte art in a black ceramic cup on a wooden table',
+  },
+  {
+    src: 'https://images.pexels.com/photos/302899/pexels-photo-302899.jpeg?auto=compress&cs=tinysrgb&w=1200',
+    alt: 'Cappuccino topped with latte art',
+  },
+  {
+    src: 'https://images.pexels.com/photos/312418/pexels-photo-312418.jpeg?auto=compress&cs=tinysrgb&w=1200',
+    alt: 'Close-up of a coffee cup on a café table',
+  },
+  {
+    src: 'https://images.pexels.com/photos/1487511/pexels-photo-1487511.jpeg?auto=compress&cs=tinysrgb&w=1200',
+    alt: 'Creamy penne pasta served on a white plate',
+  },
+]
+
+const SLIDE_INTERVAL_MS = 2000
 
 function scrollToShops() {
   const el = document.querySelector('.cp-directory')
@@ -35,15 +56,32 @@ function FeatureIcons({ itemClassName }) {
 }
 
 function HeroBanner() {
+  const [activeIndex, setActiveIndex] = useState(0)
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setActiveIndex((index) => (index + 1) % HERO_SLIDES.length)
+    }, SLIDE_INTERVAL_MS)
+    return () => window.clearInterval(timer)
+  }, [])
+
   return (
     <section className="cp-hero animate-fade-in" aria-label="Welcome">
       <div className="cp-hero-media" aria-hidden="true">
-        <img
-          src="https://images.pexels.com/photos/8488379/pexels-photo-8488379.jpeg?auto=compress&cs=tinysrgb&w=1600"
-          alt=""
-          loading="eager"
-          decoding="async"
-        />
+        {HERO_SLIDES.map((slide, index) => (
+          <div
+            className={`cp-hero-slide${index === activeIndex ? ' is-active' : ''}`}
+            key={slide.src}
+          >
+            <img
+              src={slide.src}
+              alt={slide.alt}
+              loading={index === 0 ? 'eager' : 'lazy'}
+              decoding="async"
+              draggable="false"
+            />
+          </div>
+        ))}
       </div>
 
       <div className="cp-hero-content">
