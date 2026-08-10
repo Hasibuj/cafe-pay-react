@@ -322,3 +322,33 @@ export async function markAllNotificationsRead(userId) {
   })
   return true
 }
+
+/** Delete a single notification (owner of the row only). */
+export async function deleteNotification(id, userId) {
+  if (!id || !userId) return false
+  await ensureNotificationsSchema()
+  const db = getTurso()
+  await db.execute({
+    sql: 'DELETE FROM notifications WHERE id = ? AND user_id = ?',
+    args: [String(id), norm(userId)],
+  })
+  return true
+}
+
+/**
+ * Clear notifications for a user.
+ * @param {{ onlyRead?: boolean }} opts — if onlyRead, delete read ones; else all
+ */
+export async function clearNotifications(userId, { onlyRead = true } = {}) {
+  if (!userId) return 0
+  await ensureNotificationsSchema()
+  const db = getTurso()
+  const sql = onlyRead
+    ? 'DELETE FROM notifications WHERE user_id = ? AND is_read = 1'
+    : 'DELETE FROM notifications WHERE user_id = ?'
+  const res = await db.execute({
+    sql,
+    args: [norm(userId)],
+  })
+  return Number(res.rowsAffected || 0)
+}

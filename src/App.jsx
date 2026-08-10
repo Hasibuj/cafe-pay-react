@@ -8,20 +8,24 @@ import Header from './components/Header'
 import HeroBanner from './components/HeroBanner'
 import Footer from './components/Footer'
 import WalletModal from './components/WalletModal'
-import OwnerModal from './components/OwnerModal'
 import DirectoryPage from './pages/DirectoryPage'
 import StorePage from './pages/StorePage'
+import OwnerDashboardPage from './pages/OwnerDashboardPage'
 
 const queryClient = new QueryClient()
 
 function AppInner() {
   const [currentView, setCurrentView] = useState('directory')
   const [selectedShopAddress, setSelectedShopAddress] = useState(null)
-  const [ownerModalOpen, setOwnerModalOpen] = useState(false)
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search)
     const shopParam = urlParams.get('shop')
+    const viewParam = urlParams.get('view')
+    if (viewParam === 'owner') {
+      setCurrentView('owner')
+      return
+    }
     if (shopParam) {
       setSelectedShopAddress(shopParam)
       setCurrentView('store')
@@ -41,34 +45,38 @@ function AppInner() {
     setSelectedShopAddress(null)
   }, [])
 
-  const handleOpenOwnerModal = useCallback(() => {
-    setOwnerModalOpen(true)
+  const handleOpenOwnerDashboard = useCallback(() => {
+    window.history.pushState({}, '', '?view=owner')
+    setCurrentView('owner')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [])
+
+  const isOwner = currentView === 'owner'
 
   return (
     <div className="cp-shell">
-      <Header onOpenOwnerModal={handleOpenOwnerModal} />
+      <Header onOpenOwnerModal={handleOpenOwnerDashboard} />
 
-      <main className="cp-main">
+      <main className={`cp-main ${isOwner ? 'cp-main--owner' : ''}`}>
         {currentView === 'directory' && <HeroBanner />}
 
-        {currentView === 'directory' ? (
+        {currentView === 'directory' && (
           <DirectoryPage onOpenStore={handleOpenStore} />
-        ) : (
+        )}
+        {currentView === 'store' && (
           <StorePage
             shopOwnerAddress={selectedShopAddress}
             onBackToDirectory={handleBackToDirectory}
           />
         )}
+        {currentView === 'owner' && (
+          <OwnerDashboardPage onBack={handleBackToDirectory} />
+        )}
       </main>
 
-      <Footer />
+      {!isOwner && <Footer />}
 
       <WalletModal />
-      <OwnerModal
-        isOpen={ownerModalOpen}
-        onClose={() => setOwnerModalOpen(false)}
-      />
     </div>
   )
 }
