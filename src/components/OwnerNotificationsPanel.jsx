@@ -1,4 +1,4 @@
-import { CheckCheck, Bell, ArrowRight } from 'lucide-react'
+import { CheckCheck, Bell, ArrowRight, Trash2, Eraser } from 'lucide-react'
 import { useNotifications } from '../hooks/useOrders'
 import { useToast } from '../context/ToastContext'
 
@@ -21,16 +21,37 @@ function timeAgo(ts) {
 }
 
 /**
- * Owner notifications — unread badge, history (never auto-deleted), mark as
- * read, mark all read, and "View order" that expands the related order card.
+ * Owner alerts — mark read, dismiss one, clear read. Orders are never deleted;
+ * completed tickets live under History.
  */
 export default function OwnerNotificationsPanel({ ownerAddress, enabled, onViewOrder }) {
   const toast = useToast()
-  const { notifications, unread, loading, markRead, markAllRead } = useNotifications(ownerAddress, 'owner', enabled)
+  const {
+    notifications,
+    unread,
+    loading,
+    markRead,
+    markAllRead,
+    dismiss,
+    clearRead,
+  } = useNotifications(ownerAddress, 'owner', enabled)
+
+  const readCount = notifications.filter((n) => n.isRead).length
 
   const handleMarkAll = async () => {
     await markAllRead()
-    toast.success('Notifications', 'All notifications marked as read.')
+    toast.success('Notifications', 'All alerts marked as read.')
+  }
+
+  const handleClearRead = async () => {
+    if (readCount === 0) return
+    if (!window.confirm(`Remove ${readCount} read alert${readCount === 1 ? '' : 's'}? Orders stay in History.`)) return
+    await clearRead()
+    toast.success('Alerts cleared', 'Read notifications removed. Order history is untouched.')
+  }
+
+  const handleDismiss = async (id) => {
+    await dismiss(id)
   }
 
   return (
@@ -38,20 +59,37 @@ export default function OwnerNotificationsPanel({ ownerAddress, enabled, onViewO
       <div className="cp-owner-section-head">
         <h4 className="flex items-center gap-1.5">
           <Bell size={15} />
-          Notifications
+          Alerts
           {unread > 0 && <span className="cp-notif-badge-inline">{unread}</span>}
         </h4>
-        {notifications.length > 0 && (
-          <button
-            type="button"
-            onClick={handleMarkAll}
-            className="cp-btn cp-btn-ghost !min-h-8 !px-2.5 !text-[0.65rem]"
-          >
-            <CheckCheck size={12} />
-            Mark all read
-          </button>
-        )}
+        <div className="flex flex-wrap gap-1.5">
+          {notifications.length > 0 && unread > 0 && (
+            <button
+              type="button"
+              onClick={handleMarkAll}
+              className="cp-btn cp-btn-ghost !min-h-8 !px-2.5 !text-[0.65rem]"
+            >
+              <CheckCheck size={12} />
+              Mark all read
+            </button>
+          )}
+          {readCount > 0 && (
+            <button
+              type="button"
+              onClick={handleClearRead}
+              className="cp-btn cp-btn-ghost !min-h-8 !px-2.5 !text-[0.65rem]"
+            >
+              <Eraser size={12} />
+              Clear read
+            </button>
+          )}
+        </div>
       </div>
+
+      <p className="cp-field-hint !mt-0 mb-3">
+        New orders and payments show here. Finishing an order does not delete it —
+        check History to look up order #, table, or past sales. Dismiss only clears the alert.
+      </p>
 
       {loading && notifications.length === 0 ? (
         <p className="text-xs text-center py-8" style={{ color: 'var(--text-tertiary)' }}>
@@ -61,10 +99,10 @@ export default function OwnerNotificationsPanel({ ownerAddress, enabled, onViewO
         <div className="text-center py-8">
           <Bell size={22} strokeWidth={1.5} style={{ color: 'var(--text-tertiary)' }} className="mx-auto" />
           <p className="text-sm font-medium mt-2" style={{ color: 'var(--text-secondary)' }}>
-            No notifications yet
+            No alerts
           </p>
           <p className="text-xs mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-            New orders and status changes will show up here.
+            You will be notified for new orders and payments.
           </p>
         </div>
       ) : (
@@ -92,19 +130,31 @@ export default function OwnerNotificationsPanel({ ownerAddress, enabled, onViewO
                   </span>
                 </span>
               </button>
-              {onViewOrder && (
+              <div className="cp-notif-actions">
+                {onViewOrder && n.orderId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      markRead(n.id)
+                      onViewOrder(n.orderId)
+                    }}
+                    className="cp-btn cp-btn-ghost !min-h-8 !px-2.5 !text-[0.65rem] shrink-0"
+                  >
+                    View
+                    <ArrowRight size={11} />
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => {
-                    markRead(n.id)
-                    onViewOrder(n.orderId)
-                  }}
-                  className="cp-btn cp-btn-ghost !min-h-8 !px-2.5 !text-[0.65rem] shrink-0"
+                  onClick={() => handleDismiss(n.id)}
+                  className="cp-btn cp-btn-ghost !min-h-8 !px-2 !text-[0.65rem] shrink-0"
+                  style={{ color: 'var(--text-tertiary)' }}
+                  title="Dismiss alert"
+                  aria-label="Dismiss alert"
                 >
-                  View order
-                  <ArrowRight size={11} />
+                  <Trash2 size={12} />
                 </button>
-              )}
+              </div>
               {!n.isRead && <span className="cp-notif-dot" aria-hidden />}
             </li>
           ))}

@@ -82,6 +82,134 @@ export function markAllNotificationsRead(user) {
   })
 }
 
+export function deleteNotification(id, user) {
+  return request('/api/notifications', {
+    method: 'DELETE',
+    body: JSON.stringify({ id, user }),
+  })
+}
+
+/** clear: 'read' | 'all' */
+export function clearNotifications(user, clear = 'read') {
+  return request('/api/notifications', {
+    method: 'DELETE',
+    body: JSON.stringify({ user, clear }),
+  })
+}
+
+export const ACTIVE_ORDER_STATUSES = ['Pending', 'Confirmed', 'Preparing', 'Ready', 'Serving']
+export const HISTORY_ORDER_STATUSES = ['Completed', 'Cancelled']
+
+export function isActiveOrder(order) {
+  return ACTIVE_ORDER_STATUSES.includes(order?.orderStatus)
+}
+
+export function isHistoryOrder(order) {
+  return HISTORY_ORDER_STATUSES.includes(order?.orderStatus)
+}
+
+/** Paid revenue that counts toward sales (not cancelled). */
+export function isCountedSale(order) {
+  if (!order || order.orderStatus === 'Cancelled') return false
+  return order.paymentStatus === 'Successful' || order.paymentStatus === 'Cash'
+}
+
+function dayKey(ts, timeZone) {
+  const d = new Date(ts)
+  if (timeZone) {
+    try {
+      return new Intl.DateTimeFormat('en-CA', {
+        timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(d)
+    } catch {
+      /* fall through */
+    }
+  }
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+export function localDayKey(ts = Date.now()) {
+  return dayKey(ts)
+}
+
+/**
+ * Build sales rollups from an order list (frontend-only; uses existing orders API).
+ */
+export function buildSalesSummary(orders = []) {
+  const paid = (orders || []).filter(isCountedSale)
+  const todayKey = localDayKey()
+  let todayUsd = 0
+  let todayCount = 0
+  let totalUsd = 0
+  let totalCount = 0
+  const byDay = new Map()
+
+  for (const o of paid) {
+    const usd = Number(o.totalUsd) || 0
+    const key = localDayKey(o.createdAt)
+    totalUsd += usd
+    totalCount += 1
+    if (key === todayKey) {
+      todayUsd += usd
+      todayCount += 1
+    }
+    const bucket = byDay.get(key) || { date: key, usd: 0, count: 0 }
+    bucket.usd += usd
+    bucket.count += 1
+    byDay.set(key, bucket)
+  }
+
+  const days = [...byDay.values()].sort((a, b) => (a.date < b.date ? 1 : -1))
+  const last7 = days.slice(0, 7)
+  const weekUsd = last7.reduce((s, d) => s + d.usd, 0)
+  const weekCount = last7.reduce((s, d) => s + d.count, 0)
+
+  return {
+    todayKey,
+    todayUsd,
+    todayCount,
+    weekUsd,
+    weekCount,
+    totalUsd,
+    totalCount,
+    days,
+  }
+}
+
+/**
+ * Free-text search across order id, table, status, payment, buyer, items.
+ */
+export function filterOrders(orders, query) {
+  const q = String(query || '').trim().toLowerCase()
+  if (!q) return orders || []
+  return (orders || []).filter((o) => {
+    const table = String(o.tableNumber ?? '').padStart(2, '0')
+    const items = (o.items || []).map((it) => `${it.qty} ${it.name} ${it.size || ''}`).join(' ')
+    const hay = [
+      o.id,
+      table,
+      `table ${table}`,
+      o.orderStatus,
+      o.paymentStatus,
+      o.paymentMethod,
+      o.buyer,
+      o.txHash,
+      String(o.totalUsd),
+      items,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+    return hay.includes(q)
+  })
+}
+
 /* ─── Realtime bridge ──────────────────────────────────────── */
 
 const listeners = new Set()

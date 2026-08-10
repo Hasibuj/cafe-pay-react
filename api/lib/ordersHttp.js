@@ -32,6 +32,8 @@ import {
   getUnreadNotificationCount,
   markNotificationRead,
   markAllNotificationsRead,
+  deleteNotification,
+  clearNotifications,
 } from './orders.js'
 
 function isAddress(v) {
@@ -90,6 +92,8 @@ async function notifyPayment(order, publish) {
 }
 
 async function notifyStatusChange(order, prevStatus, publish) {
+  // Status advances are almost always owner-driven — notify the customer only
+  // so the owner alert list does not fill with their own actions.
   const status = order.orderStatus
   const title = status === 'Cancelled' ? 'Order Cancelled' : `Order ${status}`
   const buyerNotif = await createNotification({
@@ -100,18 +104,9 @@ async function notifyStatusChange(order, prevStatus, publish) {
     title,
     message: `Your order ${order.id} is now ${status}.`,
   })
-  const ownerNotif = await createNotification({
-    userId: order.shopOwner,
-    role: 'owner',
-    orderId: order.id,
-    type: 'status',
-    title,
-    message: `${order.id} moved from ${prevStatus || 'Pending'} to ${status}.`,
-  })
   if (publish) {
     publish({ type: 'notification.created', notification: buyerNotif, channels: [`buyer:${order.buyer}`] })
-    publish({ type: 'notification.created', notification: ownerNotif, channels: [`owner:${order.shopOwner}`] })
-    publish({ type: 'order.updated', order })
+    publish({ type: 'order.updated', order, prevStatus: prevStatus || null })
   }
 }
 
@@ -276,6 +271,22 @@ export async function handleNotifications(req, res, _publish) {
         return sendJson(res, 200, { ok: true }, headers)
       }
       return sendJson(res, 400, { error: 'Provide { id, user } or { all: true, user }' }, headers)
+    }
+
+    if (req.method === 'DELETE') {
+      const body = await readNodeBody(req)
+      if (!isAddress(body.user)) {
+        return sendJson(res, 400, { error: 'user address required' }, headers)
+      }
+      if (body.id) {
+        await deleteNotification(body.id, body.user)
+        return sendJson(res, 200, { ok: true }, headers)
+      }
+      if (body.clear === 'read' || body.clear === 'all') {
+        const removed = await clearNotifications(body.user, { onlyRead: body.clear !== 'all' })
+        return sendJson(res, 200, { ok: true, removed }, headers)
+      }
+      return sendJson(res, 400, { error: 'Provide { id, user } or { clear: "read"|"all", user }' }, headers)
     }
 
     return sendJson(res, 405, { error: 'Method not allowed' }, headers)

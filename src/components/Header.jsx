@@ -125,10 +125,10 @@ export default function Header({ onOpenOwnerModal }) {
               type="button"
               onClick={onOpenOwnerModal}
               className="cp-btn cp-btn-ghost !min-h-10 !px-2.5 sm:!px-3 !text-[0.7rem] sm:!text-xs hidden sm:inline-flex"
-              aria-label="Open owner panel"
+              aria-label="Open owner dashboard"
             >
               <Building2 size={15} />
-              Owner
+              Dashboard
             </button>
           )}
 
@@ -244,7 +244,7 @@ export default function Header({ onOpenOwnerModal }) {
                         style={{ color: 'var(--text-primary)' }}
                       >
                         <Building2 size={14} />
-                        Owner panel
+                        Owner dashboard
                       </button>
                       <button
                         type="button"

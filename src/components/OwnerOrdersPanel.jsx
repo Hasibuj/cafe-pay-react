@@ -1,7 +1,7 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ChevronRight, Check, XCircle, Loader2, UtensilsCrossed, Table2, Star } from 'lucide-react'
 import { useOrderFeed, useNewOrderSignal } from '../hooks/useOrders'
-import { updateOrderStatus, nextOrderStatus } from '../utils/orders'
+import { updateOrderStatus, nextOrderStatus, isActiveOrder } from '../utils/orders'
 import { useToast } from '../context/ToastContext'
 
 const PAYMENT_META = {
@@ -13,12 +13,12 @@ const PAYMENT_META = {
   Refunded: { label: '↩️ Refunded', cls: 'is-muted' },
 }
 
-function PaymentPill({ status }) {
+export function PaymentPill({ status }) {
   const cfg = PAYMENT_META[status] || PAYMENT_META.Pending
   return <span className={`cp-pay-pill ${cfg.cls}`}>{cfg.label}</span>
 }
 
-function StatusPill({ status }) {
+export function OrderStatusPill({ status }) {
   const cancelled = status === 'Cancelled'
   return (
     <span className={`cp-pay-pill ${cancelled ? 'is-fail' : status === 'Completed' ? 'is-success' : 'is-muted'}`}>
@@ -27,9 +27,12 @@ function StatusPill({ status }) {
   )
 }
 
-function OrderRow({ order, onExpand }) {
+export function OrderRow({ order, onExpand, showDate = false }) {
   const lines = order.items || []
   const count = lines.reduce((s, l) => s + (Number(l.qty) || 0), 0)
+  const when = showDate
+    ? `${new Date(order.createdAt).toLocaleDateString()} · ${new Date(order.createdAt).toLocaleTimeString()}`
+    : new Date(order.createdAt).toLocaleTimeString()
   return (
     <button type="button" onClick={onExpand} className="cp-order-row">
       <div className="min-w-0 flex-1">
@@ -41,16 +44,16 @@ function OrderRow({ order, onExpand }) {
           {lines.map((l) => `${l.qty} × ${l.name}`).join(' · ')}
         </p>
         <p className="text-[0.65rem] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-          {count} item{count === 1 ? '' : 's'} · {new Date(order.createdAt).toLocaleTimeString()}
+          {count} item{count === 1 ? '' : 's'} · {when}
         </p>
       </div>
       <div className="flex flex-col items-end gap-1 shrink-0">
         <span className="text-sm font-bold tabular-nums" style={{ color: 'var(--color-brand-400)' }}>
-          {order.totalUsd.toFixed(2)} USDC
+          {Number(order.totalUsd).toFixed(2)} USDC
         </span>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap justify-end">
           <PaymentPill status={order.paymentStatus} />
-          <StatusPill status={order.orderStatus} />
+          <OrderStatusPill status={order.orderStatus} />
         </div>
       </div>
       <ChevronRight size={15} style={{ color: 'var(--text-tertiary)' }} />
@@ -58,12 +61,13 @@ function OrderRow({ order, onExpand }) {
   )
 }
 
-function OrderDetail({ order, onUpdated }) {
+export function OrderDetail({ order, onUpdated, readOnly = false }) {
   const toast = useToast()
   const [busy, setBusy] = useState(null)
 
   const advance = nextOrderStatus(order.orderStatus)
   const cancelled = order.orderStatus === 'Cancelled'
+  const completed = order.orderStatus === 'Completed'
 
   const changeStatus = async (next) => {
     setBusy(next)
@@ -84,7 +88,7 @@ function OrderDetail({ order, onUpdated }) {
         <h5 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Order {order.id}</h5>
         <div className="flex items-center gap-2">
           <PaymentPill status={order.paymentStatus} />
-          <StatusPill status={order.orderStatus} />
+          <OrderStatusPill status={order.orderStatus} />
         </div>
       </div>
 
@@ -96,7 +100,7 @@ function OrderDetail({ order, onUpdated }) {
       </div>
 
       <ul className="cp-order-items">
-        {order.items.map((it, idx) => (
+        {(order.items || []).map((it, idx) => (
           <li key={idx} className="cp-order-item">
             <div className="min-w-0 flex-1">
               <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
@@ -120,7 +124,7 @@ function OrderDetail({ order, onUpdated }) {
 
       <div className="cp-order-total">
         <span>Total</span>
-        <strong className="tabular-nums">{order.totalUsd.toFixed(2)} USDC</strong>
+        <strong className="tabular-nums">{Number(order.totalUsd).toFixed(2)} USDC</strong>
       </div>
 
       <div className="cp-order-payline">
@@ -137,59 +141,71 @@ function OrderDetail({ order, onUpdated }) {
         </p>
       )}
 
-      <div className="cp-order-actions">
-        <p className="text-[0.65rem] font-semibold uppercase tracking-wide mb-1.5" style={{ color: 'var(--text-tertiary)' }}>
-          Update status
+      {!readOnly && (
+        <div className="cp-order-actions">
+          <p className="text-[0.65rem] font-semibold uppercase tracking-wide mb-1.5" style={{ color: 'var(--text-tertiary)' }}>
+            Update status
+          </p>
+          {!cancelled && !completed && advance && (
+            <button
+              type="button"
+              onClick={() => changeStatus(advance)}
+              disabled={busy != null}
+              className="cp-btn cp-btn-primary !min-h-9 !text-xs"
+            >
+              {busy === advance ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+              Advance to {advance}
+            </button>
+          )}
+          {!cancelled && !completed && (
+            <button
+              type="button"
+              onClick={() => changeStatus('Cancelled')}
+              disabled={busy != null}
+              className="cp-btn cp-btn-ghost !min-h-9 !text-xs"
+              style={{ color: 'var(--color-error)' }}
+            >
+              {busy === 'Cancelled' ? <Loader2 size={12} className="animate-spin" /> : <XCircle size={12} />}
+              Cancel order
+            </button>
+          )}
+          {cancelled && (
+            <span className="text-xs font-medium" style={{ color: 'var(--color-error)' }}>
+              This order was cancelled.
+            </span>
+          )}
+          {completed && (
+            <span className="text-xs font-medium" style={{ color: 'var(--color-success)' }}>
+              Completed — kept in History (never deleted).
+            </span>
+          )}
+        </div>
+      )}
+
+      {readOnly && completed && (
+        <p className="text-xs mt-3" style={{ color: 'var(--text-tertiary)' }}>
+          Archived in history for lookup — recoverable anytime.
         </p>
-        {!cancelled && advance && (
-          <button
-            type="button"
-            onClick={() => changeStatus(advance)}
-            disabled={busy != null}
-            className="cp-btn cp-btn-primary !min-h-9 !text-xs"
-          >
-            {busy === advance ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
-            Advance to {advance}
-          </button>
-        )}
-        {!cancelled && (
-          <button
-            type="button"
-            onClick={() => changeStatus('Cancelled')}
-            disabled={busy != null}
-            className="cp-btn cp-btn-ghost !min-h-9 !text-xs"
-            style={{ color: 'var(--color-error)' }}
-          >
-            {busy === 'Cancelled' ? <Loader2 size={12} className="animate-spin" /> : <XCircle size={12} />}
-            Cancel order
-          </button>
-        )}
-        {cancelled && (
-          <span className="text-xs font-medium" style={{ color: 'var(--color-error)' }}>
-            This order was cancelled.
-          </span>
-        )}
-      </div>
+      )}
     </div>
   )
 }
 
 /**
- * Owner order management — live feed with instant new-order notification,
- * full details (table, items, qty, total, payment) and status workflow.
+ * Live active-order queue (excludes completed / cancelled — those live in History).
  */
 export default function OwnerOrdersPanel({ ownerAddress, enabled, expandedId, onExpandedChange }) {
   const { orders, loading, refresh } = useOrderFeed(ownerAddress)
   const newOrder = useNewOrderSignal(ownerAddress, enabled)
 
-  // Auto-expand newest order when one arrives
   useEffect(() => {
     if (newOrder?.order?.id) onExpandedChange?.(newOrder.order.id)
   }, [newOrder, onExpandedChange])
 
-  const selected = orders.find((o) => o.id === expandedId)
+  const active = useMemo(() => (orders || []).filter(isActiveOrder), [orders])
+  const selected = active.find((o) => o.id === expandedId) || orders.find((o) => o.id === expandedId)
 
-  const handleUpdated = (_updated) => {
+  const handleUpdated = () => {
     refresh()
   }
 
@@ -198,25 +214,30 @@ export default function OwnerOrdersPanel({ ownerAddress, enabled, expandedId, on
       <div className="cp-owner-section-head">
         <h4>
           <UtensilsCrossed size={15} />
-          Orders
+          Live orders
         </h4>
         <span className="text-[0.65rem]" style={{ color: 'var(--text-tertiary)' }}>
-          {orders.length} order{orders.length === 1 ? '' : 's'} · live
+          {active.length} open · completed go to History
         </span>
       </div>
 
-      {loading && orders.length === 0 ? (
+      {loading && active.length === 0 && orders.length === 0 ? (
         <p className="text-xs text-center py-8" style={{ color: 'var(--text-tertiary)' }}>
           Loading orders…
         </p>
-      ) : orders.length === 0 ? (
-        <p className="text-xs text-center py-8" style={{ color: 'var(--text-tertiary)' }}>
-          No orders yet — new orders will appear here instantly.
-        </p>
+      ) : active.length === 0 ? (
+        <div className="text-center py-8">
+          <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+            No open orders
+          </p>
+          <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>
+            New tickets appear here. Finished orders stay in History forever.
+          </p>
+        </div>
       ) : (
         <>
           <div className="cp-order-list">
-            {orders.map((order) => (
+            {active.map((order) => (
               <OrderRow
                 key={order.id}
                 order={order}
@@ -224,7 +245,9 @@ export default function OwnerOrdersPanel({ ownerAddress, enabled, expandedId, on
               />
             ))}
           </div>
-          {selected && <OrderDetail order={selected} onUpdated={handleUpdated} />}
+          {selected && isActiveOrder(selected) && (
+            <OrderDetail order={selected} onUpdated={handleUpdated} />
+          )}
         </>
       )}
     </section>

@@ -6,6 +6,8 @@ import {
   fetchUnreadCount,
   markNotificationRead,
   markAllNotificationsRead,
+  deleteNotification,
+  clearNotifications,
   subscribeOrders,
 } from '../utils/orders'
 
@@ -254,5 +256,51 @@ export function useNotifications(userId, role = 'owner', enabled = true) {
     }
   }, [userId])
 
-  return { notifications, unread, loading, error, markRead, markAllRead, refresh: load }
+  const dismiss = useCallback(async (id) => {
+    if (!userId || !id) return
+    try {
+      await deleteNotification(id, userId)
+      setNotifications((list) => {
+        const target = list.find((n) => n.id === id)
+        if (target && !target.isRead) setUnread((u) => Math.max(0, u - 1))
+        return list.filter((n) => n.id !== id)
+      })
+    } catch {
+      /* ignore */
+    }
+  }, [userId])
+
+  const clearRead = useCallback(async () => {
+    if (!userId) return
+    try {
+      await clearNotifications(userId, 'read')
+      setNotifications((list) => list.filter((n) => !n.isRead))
+    } catch {
+      /* ignore */
+    }
+  }, [userId])
+
+  const clearAll = useCallback(async () => {
+    if (!userId) return
+    try {
+      await clearNotifications(userId, 'all')
+      setNotifications([])
+      setUnread(0)
+    } catch {
+      /* ignore */
+    }
+  }, [userId])
+
+  return {
+    notifications,
+    unread,
+    loading,
+    error,
+    markRead,
+    markAllRead,
+    dismiss,
+    clearRead,
+    clearAll,
+    refresh: load,
+  }
 }
