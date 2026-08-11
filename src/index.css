@@ -271,6 +271,185 @@ textarea {
   min-width: 0;
 }
 
+/* ─── How it works ─── */
+.cp-how {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(1.4rem, 3vw, 2rem);
+  min-width: 0;
+}
+
+.cp-how-head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding-inline: 0.15rem;
+}
+
+.cp-how-lead {
+  max-width: 44ch;
+  font-size: 0.90625rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  text-wrap: pretty;
+}
+
+.cp-how-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+  counter-reset: how-step;
+}
+
+.cp-how-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 1.15rem 1.25rem;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-default);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-card);
+}
+
+.cp-how-card p {
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  text-wrap: pretty;
+}
+
+.cp-how-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.cp-how-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 0.9rem;
+  border: 1px solid oklch(0.58 0.11 48 / 0.25);
+  background: oklch(0.58 0.11 48 / 0.09);
+  color: var(--color-brand-400);
+}
+
+.dark .cp-how-icon {
+  color: var(--color-brand-300);
+}
+
+.cp-how-step {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.8125rem;
+  letter-spacing: 0.12em;
+  color: var(--text-tertiary);
+}
+
+.cp-how-bottom {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.cp-how-owner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1.15rem 1.25rem;
+  border-radius: var(--radius-xl);
+  border: 1px dashed var(--border-strong);
+  background: var(--bg-card-hover);
+}
+
+.cp-how-owner-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.cp-how-owner-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+.cp-how-owner-list li svg {
+  flex-shrink: 0;
+  margin-top: 0.18rem;
+  color: var(--color-brand-400);
+}
+
+.cp-how-perks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1.2rem;
+  padding-inline: 0.15rem;
+}
+
+.cp-how-perks li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.cp-how-perks li svg {
+  color: var(--color-success);
+}
+
+@media (min-width: 520px) {
+  .cp-how-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 860px) {
+  .cp-how-steps {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .cp-how-bottom {
+    flex-direction: row;
+    align-items: stretch;
+    justify-content: space-between;
+    gap: 1.25rem;
+  }
+
+  .cp-how-owner {
+    flex: 1 1 0;
+  }
+
+  .cp-how-perks {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    flex: 0 0 auto;
+    gap: 0.6rem 1.2rem;
+    padding-inline: 0;
+  }
+}
+
 /* Soft fade above footer — no hard rule cutting the content */
 .cp-footer {
   position: relative;

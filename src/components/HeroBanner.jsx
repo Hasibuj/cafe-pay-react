@@ -29,6 +29,11 @@ function scrollToShops() {
   if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
+function scrollToHowItWorks() {
+  const el = document.querySelector('.cp-how')
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
 const HERO_FEATURES = [
   { icon: BookOpen, line1: 'Browse', line2: 'menus' },
   { icon: Zap, line1: 'Order', line2: 'instantly' },
@@ -125,7 +130,7 @@ function HeroBanner() {
             Explore cafés
             <ArrowRight size={15} aria-hidden />
           </button>
-          <button type="button" onClick={scrollToShops} className="cp-btn cp-btn-hero-secondary cp-hero-cta">
+          <button type="button" onClick={scrollToHowItWorks} className="cp-btn cp-btn-hero-secondary cp-hero-cta">
             <Play size={13} fill="currentColor" aria-hidden />
             How it works
           </button>

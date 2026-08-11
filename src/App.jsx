@@ -6,6 +6,7 @@ import { WalletStoreProvider } from './context/WalletStoreContext'
 import { ToastProvider } from './context/ToastContext'
 import Header from './components/Header'
 import HeroBanner from './components/HeroBanner'
+import HowItWorks from './components/HowItWorks'
 import Footer from './components/Footer'
 import WalletModal from './components/WalletModal'
 import OwnerModal from './components/OwnerModal'
@@ -51,6 +52,8 @@ function AppInner() {
 
       <main className="cp-main">
         {currentView === 'directory' && <HeroBanner />}
+
+        {currentView === 'directory' && <HowItWorks />}
 
         {currentView === 'directory' ? (
           <DirectoryPage onOpenStore={handleOpenStore} />
