@@ -2643,6 +2643,1229 @@ textarea {
   max-width: 36rem;
 }
 
+/* ─── How it works demo (customer film → owner film) ─── */
+.cp-how-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding:
+    max(1rem, env(safe-area-inset-top, 0px))
+    max(1rem, env(safe-area-inset-right, 0px))
+    max(1rem, env(safe-area-inset-bottom, 0px))
+    max(1rem, env(safe-area-inset-left, 0px));
+  background: oklch(0.08 0.02 40 / 0.78);
+  backdrop-filter: blur(14px) saturate(120%);
+  -webkit-backdrop-filter: blur(14px) saturate(120%);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  cursor: pointer;
+  animation: how-overlay-in 0.28s ease both;
+}
+
+.cp-how-modal {
+  position: relative;
+  width: min(26.5rem, 100%);
+  max-width: 26.5rem;
+  margin: auto;
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: min(90dvh, 820px);
+  border: 1px solid var(--border-default);
+  border-radius: 1.25rem;
+  box-shadow:
+    0 28px 80px -24px oklch(0 0 0 / 0.65),
+    0 0 0 1px oklch(1 0 0 / 0.04);
+  background: var(--bg-elevated);
+  cursor: default;
+  animation: how-modal-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.cp-how-x {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.85rem;
+  z-index: 8;
+  width: 2.15rem;
+  height: 2.15rem;
+  border: none;
+  border-radius: 999px;
+  background: oklch(0.2 0.02 40 / 0.55);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.cp-how-x:hover {
+  background: oklch(0.28 0.02 40 / 0.8);
+  color: var(--text-primary);
+  transform: scale(1.05);
+}
+
+.cp-how-top {
+  padding: 1.1rem 3.1rem 0.55rem 1.2rem;
+}
+
+.cp-how-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.4rem;
+}
+
+.cp-how-role {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.22rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.cp-how-role.is-customer {
+  color: oklch(0.98 0.01 85);
+  background: linear-gradient(165deg, oklch(0.62 0.11 50), oklch(0.42 0.09 40));
+}
+
+.cp-how-role.is-owner {
+  color: oklch(0.16 0.03 145);
+  background: linear-gradient(165deg, oklch(0.78 0.1 145), oklch(0.62 0.12 145));
+}
+
+.cp-how-count {
+  font-size: 0.68rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-tertiary);
+}
+
+.cp-how-title {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.2;
+}
+
+.cp-how-body {
+  padding: 0.55rem 1.05rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1;
+}
+
+.cp-how-stage-wrap {
+  position: relative;
+  border-radius: 1.1rem;
+  overflow: hidden;
+  min-height: 22rem;
+  border: 1px solid var(--border-default);
+  background: oklch(0.14 0.015 38);
+  isolation: isolate;
+  animation: how-stage-swap 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.cp-how-stage-badge {
+  position: absolute;
+  top: 0.65rem;
+  left: 0.65rem;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: calc(100% - 1.3rem);
+  padding: 0.3rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: oklch(0.97 0.02 85);
+  background: oklch(0.12 0.02 40 / 0.72);
+  border: 1px solid oklch(1 0 0 / 0.1);
+  backdrop-filter: blur(10px);
+}
+
+.cp-how-film-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 6;
+  height: 0.2rem;
+  background: oklch(1 0 0 / 0.08);
+}
+
+.cp-how-film-progress > div {
+  height: 100%;
+  background: linear-gradient(90deg, oklch(0.7 0.12 55), oklch(0.82 0.1 90));
+  transition: width 0.05s linear;
+}
+
+.cp-how-scene {
+  position: relative;
+  min-height: 22rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.75rem 0.85rem 1.1rem;
+  overflow: hidden;
+}
+
+.cp-how-film-bg {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(90% 70% at 20% 10%, oklch(0.55 0.1 48 / 0.28), transparent 55%),
+    radial-gradient(70% 60% at 90% 90%, oklch(0.45 0.08 30 / 0.2), transparent 50%),
+    linear-gradient(165deg, oklch(0.18 0.02 40), oklch(0.12 0.015 36));
+  animation: how-bg-drift 8s ease-in-out infinite alternate;
+}
+
+.cp-how-film-bg.is-owner {
+  background:
+    radial-gradient(90% 70% at 80% 15%, oklch(0.5 0.1 145 / 0.22), transparent 55%),
+    radial-gradient(70% 60% at 15% 85%, oklch(0.48 0.08 55 / 0.18), transparent 50%),
+    linear-gradient(165deg, oklch(0.17 0.02 42), oklch(0.12 0.015 36));
+}
+
+/* Phone frame — customer film */
+.cp-how-phone {
+  position: relative;
+  z-index: 2;
+  width: min(15.25rem, 78%);
+  min-height: 18.5rem;
+  padding: 0.85rem 0.65rem 0.7rem;
+  border-radius: 1.35rem;
+  border: 2px solid oklch(1 0 0 / 0.12);
+  background: oklch(0.16 0.015 40);
+  box-shadow:
+    0 0 0 4px oklch(0.1 0.01 40 / 0.65),
+    0 24px 50px -18px oklch(0 0 0 / 0.65);
+  animation: how-device-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.cp-how-phone-notch {
+  width: 3.2rem;
+  height: 0.28rem;
+  margin: 0 auto 0.55rem;
+  border-radius: 999px;
+  background: oklch(1 0 0 / 0.12);
+}
+
+.cp-how-phone-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: oklch(0.95 0.015 85);
+  margin-bottom: 0.5rem;
+}
+
+.cp-how-phone-search {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.55rem;
+  border-radius: 0.65rem;
+  background: oklch(0.22 0.015 42);
+  border: 1px solid oklch(1 0 0 / 0.06);
+  color: oklch(0.72 0.02 70);
+  font-size: 0.65rem;
+  margin-bottom: 0.55rem;
+}
+
+.cp-how-phone-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.cp-how-phone-shop {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem;
+  border-radius: 0.7rem;
+  background: oklch(0.2 0.015 42);
+  border: 1px solid oklch(1 0 0 / 0.06);
+  color: oklch(0.94 0.015 85);
+}
+
+.cp-how-phone-shop img {
+  width: 2.15rem;
+  height: 2.15rem;
+  border-radius: 0.5rem;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.cp-how-phone-shop strong {
+  display: block;
+  font-size: 0.68rem;
+  line-height: 1.15;
+}
+
+.cp-how-phone-shop span {
+  display: block;
+  font-size: 0.55rem;
+  opacity: 0.65;
+  margin-top: 0.1rem;
+}
+
+.cp-how-phone-shop > svg {
+  margin-left: auto;
+  color: var(--color-brand-300);
+  flex-shrink: 0;
+}
+
+.cp-how-phone-cta {
+  margin-top: 0.55rem;
+  text-align: center;
+  padding: 0.5rem;
+  border-radius: 0.7rem;
+  font-size: 0.68rem;
+  font-weight: 750;
+  color: oklch(0.98 0.01 85);
+  background: linear-gradient(165deg, oklch(0.62 0.11 50), oklch(0.42 0.09 40));
+}
+
+.cp-how-phone-shophead {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+  color: oklch(0.95 0.015 85);
+}
+
+.cp-how-phone-shophead img {
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 0.5rem;
+  object-fit: cover;
+}
+
+.cp-how-phone-shophead strong {
+  display: block;
+  font-size: 0.7rem;
+}
+
+.cp-how-phone-shophead > div > span {
+  display: block;
+  font-size: 0.55rem;
+  opacity: 0.65;
+}
+
+.cp-how-table-chip {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.22rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.55rem;
+  font-weight: 750;
+  white-space: nowrap;
+  color: oklch(0.98 0.01 85);
+  background: oklch(0.55 0.1 48 / 0.45);
+  border: 1px solid oklch(0.7 0.1 55 / 0.35);
+}
+
+.cp-how-phone-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.cp-how-phone-dish {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem;
+  border-radius: 0.65rem;
+  background: oklch(0.2 0.015 42);
+  border: 1px solid oklch(1 0 0 / 0.05);
+  color: oklch(0.95 0.015 85);
+}
+
+.cp-how-phone-dish.is-picked {
+  border-color: oklch(0.72 0.12 55 / 0.55);
+  box-shadow: 0 0 0 1px oklch(0.72 0.12 55 / 0.2);
+}
+
+.cp-how-phone-dish img {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.45rem;
+  object-fit: cover;
+}
+
+.cp-how-phone-dish strong {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.65rem;
+}
+
+.cp-how-phone-dish strong em {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.12rem;
+  font-style: normal;
+  font-size: 0.5rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--color-warning);
+}
+
+.cp-how-phone-dish > div > span {
+  display: block;
+  font-size: 0.55rem;
+  color: var(--color-brand-300);
+  font-weight: 700;
+}
+
+.cp-how-add,
+.cp-how-added {
+  margin-left: auto;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.cp-how-add {
+  color: oklch(0.85 0.02 80);
+  background: oklch(0.28 0.02 42);
+}
+
+.cp-how-added {
+  color: oklch(0.18 0.03 40);
+  background: oklch(0.85 0.1 95);
+  animation: how-pop 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.55s both;
+}
+
+.cp-how-phone-cart {
+  margin-top: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 0.7rem;
+  font-size: 0.62rem;
+  font-weight: 650;
+  color: oklch(0.98 0.01 85);
+  background: linear-gradient(165deg, oklch(0.62 0.11 50), oklch(0.4 0.09 40));
+}
+
+.cp-how-pay-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.cp-how-wallet-mini {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem;
+  border-radius: 0.75rem;
+  background: oklch(0.2 0.015 42);
+  border: 1px solid oklch(1 0 0 / 0.06);
+  color: oklch(0.95 0.015 85);
+}
+
+.cp-how-wallet-orb {
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 0.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(160deg, oklch(0.62 0.11 50), oklch(0.38 0.08 38));
+  color: oklch(0.98 0.01 85);
+  flex-shrink: 0;
+}
+
+.cp-how-wallet-mini strong {
+  display: block;
+  font-size: 0.68rem;
+}
+
+.cp-how-wallet-mini span {
+  display: block;
+  font-size: 0.55rem;
+  opacity: 0.65;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.cp-how-ok {
+  margin-left: auto;
+  color: var(--color-success);
+}
+
+.cp-how-chain-mini {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.58rem;
+  font-weight: 750;
+  color: var(--color-success);
+  background: oklch(0.68 0.12 145 / 0.14);
+  border: 1px solid oklch(0.68 0.12 145 / 0.28);
+}
+
+.cp-how-bill {
+  padding: 0.55rem 0.6rem;
+  border-radius: 0.75rem;
+  background: oklch(0.2 0.015 42);
+  border: 1px solid oklch(1 0 0 / 0.06);
+  color: oklch(0.92 0.015 85);
+  font-size: 0.65rem;
+}
+
+.cp-how-bill > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.3rem;
+  opacity: 0.85;
+}
+
+.cp-how-bill > div.is-total {
+  opacity: 1;
+  margin: 0.4rem 0 0;
+  padding-top: 0.4rem;
+  border-top: 1px solid oklch(1 0 0 / 0.08);
+  font-weight: 700;
+}
+
+.cp-how-pay-anim {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.35rem 0.15rem;
+}
+
+.cp-how-pay-node {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.55rem;
+  font-weight: 750;
+  color: oklch(0.9 0.02 85);
+  white-space: nowrap;
+}
+
+.cp-how-pay-node.is-cafe {
+  color: var(--color-success);
+}
+
+.cp-how-pay-line {
+  position: relative;
+  flex: 1;
+  height: 0.16rem;
+  border-radius: 999px;
+  background: linear-gradient(90deg, oklch(0.58 0.11 48 / 0.25), oklch(0.68 0.12 145 / 0.4));
+  overflow: visible;
+}
+
+.cp-how-coin-fly {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.22rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.52rem;
+  font-weight: 800;
+  color: oklch(0.18 0.03 40);
+  background: linear-gradient(165deg, oklch(0.78 0.12 90), oklch(0.62 0.11 55));
+  box-shadow: 0 6px 14px -6px oklch(0.4 0.1 55 / 0.7);
+  animation: how-coin 2.2s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+  white-space: nowrap;
+}
+
+.cp-how-pay-cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 2.15rem;
+  border-radius: 0.7rem;
+  font-size: 0.7rem;
+  font-weight: 750;
+  color: oklch(0.98 0.01 85);
+  background: linear-gradient(165deg, oklch(0.62 0.11 50), oklch(0.42 0.09 40));
+  animation: how-soft-pulse 2s ease-in-out infinite;
+}
+
+.cp-how-track-card {
+  text-align: center;
+  color: oklch(0.95 0.015 85);
+  padding: 0.35rem 0.25rem;
+}
+
+.cp-how-track-ok {
+  width: 2.6rem;
+  height: 2.6rem;
+  margin: 0.25rem auto 0.55rem;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-success);
+  background: oklch(0.68 0.12 145 / 0.14);
+  border: 1px solid oklch(0.68 0.12 145 / 0.3);
+  animation: how-pop 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.cp-how-track-card h5 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+
+.cp-how-track-card > p {
+  margin: 0.2rem 0 0.65rem;
+  font-size: 0.62rem;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+
+.cp-how-track-card ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  text-align: left;
+  font-size: 0.68rem;
+}
+
+.cp-how-track-card li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.28rem 0;
+  border-bottom: 1px solid oklch(1 0 0 / 0.06);
+}
+
+.cp-how-timeline {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.25rem;
+  margin: 0.75rem 0 0.55rem;
+}
+
+.cp-how-timeline span {
+  font-size: 0.5rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 0.28rem 0.1rem;
+  border-radius: 0.4rem;
+  background: oklch(0.24 0.015 42);
+  color: oklch(0.68 0.02 70);
+}
+
+.cp-how-timeline span.is-done {
+  color: var(--color-success);
+  background: oklch(0.68 0.12 145 / 0.14);
+}
+
+.cp-how-timeline span.is-live {
+  color: oklch(0.98 0.01 85);
+  background: linear-gradient(165deg, oklch(0.62 0.11 50), oklch(0.42 0.09 40));
+  animation: how-soft-pulse 1.3s ease-in-out infinite;
+}
+
+.cp-how-receipt-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.58rem;
+  opacity: 0.75;
+}
+
+/* Desktop frame — owner film */
+.cp-how-desktop {
+  position: relative;
+  z-index: 2;
+  width: min(21rem, 94%);
+  min-height: 15.5rem;
+  padding: 0.75rem;
+  border-radius: 0.95rem;
+  border: 1px solid oklch(1 0 0 / 0.1);
+  background: oklch(0.17 0.015 40 / 0.96);
+  box-shadow: 0 22px 48px -20px oklch(0 0 0 / 0.6);
+  animation: how-device-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.cp-how-scene--owner-dash .cp-how-desktop {
+  grid-template-columns: 4.5rem 1fr;
+}
+
+.cp-how-desk-side {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.35rem;
+  border-radius: 0.7rem;
+  background: oklch(0.14 0.012 38);
+  border: 1px solid oklch(1 0 0 / 0.05);
+}
+
+.cp-how-desk-side span {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.35rem 0.35rem;
+  border-radius: 0.5rem;
+  font-size: 0.52rem;
+  font-weight: 700;
+  color: oklch(0.7 0.02 70);
+}
+
+.cp-how-desk-side span.is-active {
+  color: oklch(0.98 0.01 85);
+  background: linear-gradient(165deg, oklch(0.58 0.1 50), oklch(0.4 0.08 40));
+}
+
+.cp-how-desk-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.cp-how-desk-title strong {
+  display: block;
+  font-size: 0.82rem;
+  color: oklch(0.96 0.015 85);
+}
+
+.cp-how-desk-title span {
+  font-size: 0.58rem;
+  color: oklch(0.7 0.02 70);
+}
+
+.cp-how-desk-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.35rem;
+}
+
+.cp-how-desk-stats > div {
+  padding: 0.4rem 0.35rem;
+  border-radius: 0.6rem;
+  background: oklch(0.2 0.015 42);
+  border: 1px solid oklch(1 0 0 / 0.05);
+  text-align: center;
+}
+
+.cp-how-desk-stats em {
+  display: block;
+  font-style: normal;
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-weight: 650;
+  color: oklch(0.96 0.015 85);
+  font-variant-numeric: tabular-nums;
+}
+
+.cp-how-desk-stats span {
+  font-size: 0.5rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: oklch(0.68 0.02 70);
+}
+
+.cp-how-desk-sub {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.6rem;
+  font-weight: 650;
+  color: oklch(0.88 0.03 85);
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.6rem;
+  background: oklch(0.2 0.015 42);
+  border: 1px solid oklch(1 0 0 / 0.05);
+}
+
+.cp-how-desk-sub i {
+  margin-left: auto;
+  width: 35%;
+  height: 0.28rem;
+  border-radius: 999px;
+  background: linear-gradient(90deg, oklch(0.68 0.12 145), oklch(0.62 0.11 50));
+  animation: how-bar 2.4s ease-in-out infinite;
+}
+
+.cp-how-desk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.cp-how-desk-actions span {
+  padding: 0.3rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.55rem;
+  font-weight: 750;
+  color: oklch(0.92 0.02 85);
+  background: oklch(0.24 0.02 42);
+  border: 1px solid oklch(1 0 0 / 0.06);
+}
+
+.cp-how-kitchen-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 0.7rem;
+  font-size: 0.68rem;
+  font-weight: 750;
+  color: oklch(0.98 0.01 85);
+  background: linear-gradient(165deg, oklch(0.58 0.12 45), oklch(0.4 0.09 38));
+}
+
+.cp-how-kitchen-banner em {
+  margin-left: auto;
+  font-style: normal;
+  font-size: 0.55rem;
+  opacity: 0.85;
+  font-weight: 650;
+}
+
+.cp-how-tickets {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.cp-how-ticket {
+  padding: 0.55rem 0.65rem;
+  border-radius: 0.75rem;
+  background: oklch(0.2 0.015 42);
+  border: 1px solid oklch(1 0 0 / 0.06);
+  color: oklch(0.94 0.015 85);
+}
+
+.cp-how-ticket.is-new {
+  border-color: oklch(0.7 0.12 55 / 0.45);
+  box-shadow: 0 0 0 1px oklch(0.7 0.12 55 / 0.12);
+}
+
+.cp-how-ticket header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.72rem;
+}
+
+.cp-how-ticket header span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.58rem;
+  opacity: 0.8;
+}
+
+.cp-how-ticket > p {
+  margin: 0.3rem 0 0.45rem;
+  font-size: 0.65rem;
+  opacity: 0.8;
+}
+
+.cp-how-ticket footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.cp-how-ticket footer b {
+  font-size: 0.72rem;
+  color: var(--color-brand-300);
+}
+
+.cp-how-ticket footer button {
+  border: none;
+  border-radius: 999px;
+  padding: 0.28rem 0.55rem;
+  font-size: 0.55rem;
+  font-weight: 750;
+  color: oklch(0.98 0.01 85);
+  background: linear-gradient(165deg, oklch(0.62 0.11 50), oklch(0.42 0.09 40));
+  pointer-events: none;
+}
+
+.cp-how-ticket footer em.is-ready {
+  font-style: normal;
+  font-size: 0.58rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--color-success);
+}
+
+.cp-how-kitchen-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.6rem;
+  font-weight: 650;
+  color: oklch(0.78 0.03 80);
+}
+
+.cp-how-sales-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.35rem;
+}
+
+.cp-how-sales-row > div {
+  padding: 0.45rem 0.35rem;
+  border-radius: 0.65rem;
+  background: oklch(0.2 0.015 42);
+  border: 1px solid oklch(1 0 0 / 0.05);
+  text-align: center;
+}
+
+.cp-how-sales-row span {
+  display: block;
+  font-size: 0.5rem;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: oklch(0.68 0.02 70);
+}
+
+.cp-how-sales-row strong {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  color: oklch(0.96 0.015 85);
+}
+
+.cp-how-hist-search {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 0.65rem;
+  background: oklch(0.14 0.012 38);
+  border: 1px solid oklch(1 0 0 / 0.06);
+  color: oklch(0.7 0.02 70);
+  font-size: 0.65rem;
+}
+
+.cp-how-hist-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.cp-how-hist-row {
+  display: grid;
+  grid-template-columns: 1.1fr 0.7fr 0.9fr auto;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.6rem;
+  background: oklch(0.2 0.015 42);
+  border: 1px solid oklch(1 0 0 / 0.05);
+  font-size: 0.6rem;
+  color: oklch(0.92 0.015 85);
+}
+
+.cp-how-hist-row em {
+  font-style: normal;
+  font-weight: 750;
+  font-size: 0.52rem;
+  text-transform: uppercase;
+}
+
+.cp-how-hist-row em.is-ok { color: var(--color-success); }
+.cp-how-hist-row em.is-bad { color: var(--color-error); }
+
+.cp-how-hist-row b {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-brand-300);
+  text-align: right;
+}
+
+/* Copy + nav */
+.cp-how-copy {
+  text-align: center;
+  padding: 0.1rem 0.25rem 0;
+  animation: how-fade-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.cp-how-step-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 650;
+  color: var(--text-primary);
+  letter-spacing: -0.015em;
+}
+
+.cp-how-step-caption {
+  margin: 0.3rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.cp-how-dots {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.1rem 0;
+}
+
+.cp-how-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  border: none;
+  padding: 0;
+  background: var(--border-strong);
+  cursor: pointer;
+  transition: width 0.25s ease, background 0.2s ease, transform 0.2s ease;
+}
+
+.cp-how-dot.is-done {
+  background: oklch(0.62 0.1 55 / 0.55);
+}
+
+.cp-how-dot.is-active {
+  width: 1.35rem;
+  background: linear-gradient(90deg, oklch(0.62 0.11 50), oklch(0.72 0.1 75));
+}
+
+.cp-how-dot.is-owner.is-done {
+  background: oklch(0.62 0.1 145 / 0.55);
+}
+
+.cp-how-dot.is-owner.is-active {
+  background: linear-gradient(90deg, oklch(0.62 0.12 145), oklch(0.72 0.1 100));
+}
+
+.cp-how-nav {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem;
+}
+
+.cp-how-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 2.65rem;
+  padding: 0.55rem 0.85rem;
+  border-radius: 0.85rem;
+  border: 1px solid var(--border-default);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.cp-how-nav-btn:hover:not(:disabled) {
+  background: var(--bg-card-hover);
+}
+
+.cp-how-nav-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.cp-how-nav-btn.is-primary {
+  border-color: transparent;
+  color: oklch(0.98 0.01 85);
+  background: linear-gradient(165deg, oklch(0.62 0.11 50), oklch(0.42 0.09 40));
+  box-shadow: 0 10px 22px -12px oklch(0.4 0.08 45 / 0.55);
+}
+
+.cp-how-nav-btn.is-primary:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
+/* Stagger reveals */
+.cp-how-stagger-1 { animation: how-fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) 0.05s both; }
+.cp-how-stagger-2 { animation: how-fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) 0.14s both; }
+.cp-how-stagger-3 { animation: how-fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) 0.23s both; }
+.cp-how-stagger-4 { animation: how-fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) 0.32s both; }
+.cp-how-stagger-5 { animation: how-fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) 0.4s both; }
+.cp-how-stagger-6 { animation: how-fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) 0.48s both; }
+
+@keyframes how-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes how-modal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes how-stage-swap {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes how-device-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes how-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes how-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes how-coin {
+  0% {
+    left: 0%;
+    opacity: 0;
+  }
+  12% { opacity: 1; }
+  88% { opacity: 1; }
+  100% {
+    left: 100%;
+    opacity: 0.25;
+  }
+}
+
+@keyframes how-soft-pulse {
+  0%, 100% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.02); filter: brightness(1.06); }
+}
+
+@keyframes how-bg-drift {
+  from { transform: scale(1); }
+  to { transform: scale(1.04); }
+}
+
+@keyframes how-bar {
+  0%, 100% { width: 35%; }
+  50% { width: 72%; }
+}
+
+@media (min-width: 480px) {
+  .cp-how-modal {
+    width: min(28rem, 100%);
+    max-width: 28rem;
+  }
+
+  .cp-how-stage-wrap,
+  .cp-how-scene {
+    min-height: 23rem;
+  }
+
+  .cp-how-desktop {
+    width: min(22.5rem, 94%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cp-how-overlay,
+  .cp-how-modal,
+  .cp-how-stage-wrap,
+  .cp-how-phone,
+  .cp-how-desktop,
+  .cp-how-stagger-1,
+  .cp-how-stagger-2,
+  .cp-how-stagger-3,
+  .cp-how-stagger-4,
+  .cp-how-stagger-5,
+  .cp-how-stagger-6,
+  .cp-how-coin-fly,
+  .cp-how-pay-cta,
+  .cp-how-timeline span.is-live,
+  .cp-how-film-bg,
+  .cp-how-desk-sub i {
+    animation: none !important;
+  }
+
+  .cp-how-film-progress > div {
+    transition: none;
+  }
+}
+
 /* ─── Empty / loading states ─── */
 .cp-empty {
   grid-column: 1 / -1;
