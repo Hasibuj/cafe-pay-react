@@ -1,7 +1,8 @@
-import { memo, useEffect, useState } from 'react'
+import { memo, useEffect, useState, useCallback } from 'react'
 import {
   Zap, ShieldCheck, BookOpen, CircleDollarSign, Receipt, ArrowRight, Play,
 } from 'lucide-react'
+import HowItWorksModal from './HowItWorksModal'
 
 const HERO_SLIDES = [
   {
@@ -57,13 +58,19 @@ function FeatureIcons({ itemClassName }) {
 
 function HeroBanner() {
   const [activeIndex, setActiveIndex] = useState(0)
+  const [howOpen, setHowOpen] = useState(false)
 
   useEffect(() => {
+    // Pause hero slideshow while the demo modal is open
+    if (howOpen) return undefined
     const timer = window.setInterval(() => {
       setActiveIndex((index) => (index + 1) % HERO_SLIDES.length)
     }, SLIDE_INTERVAL_MS)
     return () => window.clearInterval(timer)
-  }, [])
+  }, [howOpen])
+
+  const openHow = useCallback(() => setHowOpen(true), [])
+  const closeHow = useCallback(() => setHowOpen(false), [])
 
   return (
     <section className="cp-hero animate-fade-in" aria-label="Welcome">
@@ -125,7 +132,7 @@ function HeroBanner() {
             Explore cafés
             <ArrowRight size={15} aria-hidden />
           </button>
-          <button type="button" onClick={scrollToShops} className="cp-btn cp-btn-hero-secondary cp-hero-cta">
+          <button type="button" onClick={openHow} className="cp-btn cp-btn-hero-secondary cp-hero-cta">
             <Play size={13} fill="currentColor" aria-hidden />
             How it works
           </button>
@@ -136,6 +143,12 @@ function HeroBanner() {
       <div className="cp-hero-panel" role="presentation">
         <FeatureIcons itemClassName="cp-hero-panel-item" />
       </div>
+
+      <HowItWorksModal
+        isOpen={howOpen}
+        onClose={closeHow}
+        onExplore={scrollToShops}
+      />
     </section>
   )
 }
